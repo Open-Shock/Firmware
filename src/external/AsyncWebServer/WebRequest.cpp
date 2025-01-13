@@ -626,7 +626,6 @@ void AsyncWebServerRequest::_parseLine()
   if (_parseState == PARSE_REQ_HEADERS) {
     if (!_temp.length()) {
       // end of headers
-      _server->_rewriteRequest(this);
       _server->_attachHandler(this);
       if (_expectingContinue) {
         const char* response = "HTTP/1.1 100 Continue\r\n\r\n";

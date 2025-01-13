@@ -33,7 +33,6 @@ bool ON_AP_FILTER(AsyncWebServerRequest* request)
 
 AsyncWebServer::AsyncWebServer(uint16_t port)
   : _server(port)
-  , _rewrites(LinkedList<AsyncWebRewrite*>([](AsyncWebRewrite* r) { delete r; }))
   , _handlers(LinkedList<AsyncWebHandler*>([](AsyncWebHandler* h) { delete h; }))
 {
   _catchAllHandler = new AsyncCallbackWebHandler();
@@ -55,22 +54,6 @@ AsyncWebServer::~AsyncWebServer()
   reset();
   end();
   if (_catchAllHandler) delete _catchAllHandler;
-}
-
-AsyncWebRewrite& AsyncWebServer::addRewrite(AsyncWebRewrite* rewrite)
-{
-  _rewrites.add(rewrite);
-  return *rewrite;
-}
-
-bool AsyncWebServer::removeRewrite(AsyncWebRewrite* rewrite)
-{
-  return _rewrites.remove(rewrite);
-}
-
-AsyncWebRewrite& AsyncWebServer::rewrite(const char* from, const char* to)
-{
-  return addRewrite(new AsyncWebRewrite(from, to));
 }
 
 AsyncWebHandler& AsyncWebServer::addHandler(AsyncWebHandler* handler)
@@ -110,16 +93,6 @@ void AsyncWebServer::beginSecure(const char* cert, const char* key, const char* 
 void AsyncWebServer::_handleDisconnect(AsyncWebServerRequest* request)
 {
   delete request;
-}
-
-void AsyncWebServer::_rewriteRequest(AsyncWebServerRequest* request)
-{
-  for (const auto& r : _rewrites) {
-    if (r->match(request)) {
-      request->_url = r->toUrl();
-      request->_addGetParams(r->params());
-    }
-  }
 }
 
 void AsyncWebServer::_attachHandler(AsyncWebServerRequest* request)
@@ -200,7 +173,6 @@ void AsyncWebServer::onRequestBody(ArBodyHandlerFunction fn)
 
 void AsyncWebServer::reset()
 {
-  _rewrites.free();
   _handlers.free();
 
   if (_catchAllHandler != NULL) {

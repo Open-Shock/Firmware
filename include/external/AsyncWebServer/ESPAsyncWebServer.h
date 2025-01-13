@@ -44,7 +44,6 @@ class AsyncWebServerRequest;
 class AsyncWebServerResponse;
 class AsyncWebHeader;
 class AsyncWebParameter;
-class AsyncWebRewrite;
 class AsyncWebHandler;
 class AsyncStaticWebHandler;
 class AsyncCallbackWebHandler;
@@ -290,7 +289,7 @@ public:
 };
 
 /*
- * FILTER :: Callback to filter AsyncWebRewrite and AsyncWebHandler (done by the Server)
+ * FILTER :: Callback to filter AsyncWebHandler (done by the Server)
  * */
 
 typedef std::function<bool(AsyncWebServerRequest* request)> ArRequestFilterFunction;
@@ -298,43 +297,6 @@ typedef std::function<bool(AsyncWebServerRequest* request)> ArRequestFilterFunct
 bool ON_STA_FILTER(AsyncWebServerRequest* request);
 
 bool ON_AP_FILTER(AsyncWebServerRequest* request);
-
-/*
- * REWRITE :: One instance can be handle any Request (done by the Server)
- * */
-
-class AsyncWebRewrite {
-protected:
-  String _from;
-  String _toUrl;
-  String _params;
-  ArRequestFilterFunction _filter;
-
-public:
-  AsyncWebRewrite(const char* from, const char* to)
-    : _from(from)
-    , _toUrl(to)
-    , _params(String())
-    , _filter(NULL)
-  {
-    int index = _toUrl.indexOf('?');
-    if (index > 0) {
-      _params = _toUrl.substring(index + 1);
-      _toUrl  = _toUrl.substring(0, index);
-    }
-  }
-  virtual ~AsyncWebRewrite() { }
-  AsyncWebRewrite& setFilter(ArRequestFilterFunction fn)
-  {
-    _filter = fn;
-    return *this;
-  }
-  bool filter(AsyncWebServerRequest* request) const { return _filter == NULL || _filter(request); }
-  const String& from(void) const { return _from; }
-  const String& toUrl(void) const { return _toUrl; }
-  const String& params(void) const { return _params; }
-  virtual bool match(AsyncWebServerRequest* request) { return from() == request->url() && filter(request); }
-};
 
 /*
  * HANDLER :: One instance can be attached to any Request (done by the Server)
@@ -419,7 +381,6 @@ typedef std::function<void(AsyncWebServerRequest* request, uint8_t* data, size_t
 class AsyncWebServer {
 protected:
   AsyncServer _server;
-  LinkedList<AsyncWebRewrite*> _rewrites;
   LinkedList<AsyncWebHandler*> _handlers;
   AsyncCallbackWebHandler* _catchAllHandler;
 
@@ -434,10 +395,6 @@ public:
   void onSslFileRequest(AcSSlFileHandler cb, void* arg);
   void beginSecure(const char* cert, const char* private_key_file, const char* password);
 #endif
-
-  AsyncWebRewrite& addRewrite(AsyncWebRewrite* rewrite);
-  bool removeRewrite(AsyncWebRewrite* rewrite);
-  AsyncWebRewrite& rewrite(const char* from, const char* to);
 
   AsyncWebHandler& addHandler(AsyncWebHandler* handler);
   bool removeHandler(AsyncWebHandler* handler);
@@ -457,7 +414,6 @@ public:
 
   void _handleDisconnect(AsyncWebServerRequest* request);
   void _attachHandler(AsyncWebServerRequest* request);
-  void _rewriteRequest(AsyncWebServerRequest* request);
 };
 
 class DefaultHeaders {
