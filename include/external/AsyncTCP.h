@@ -25,10 +25,9 @@
 #include "IPAddress.h"
 #include "sdkconfig.h"
 #include <functional>
-extern "C" {
+
 #include "freertos/semphr.h"
 #include "lwip/pbuf.h"
-}
 
 // If core is not defined, then we are running in Arduino or PIO
 #ifndef CONFIG_ASYNC_TCP_RUNNING_CORE

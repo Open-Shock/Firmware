@@ -22,13 +22,13 @@
 #include "Arduino.h"
 
 #include "external/AsyncTCP.h"
-extern "C" {
+
 #include "lwip/dns.h"
 #include "lwip/err.h"
 #include "lwip/inet.h"
 #include "lwip/opt.h"
 #include "lwip/tcp.h"
-}
+
 #include "esp_task_wdt.h"
 
 /*
@@ -87,7 +87,7 @@ typedef struct {
 static QueueHandle_t _async_queue;
 static TaskHandle_t _async_service_task_handle = NULL;
 
-SemaphoreHandle_t _slots_lock;
+static SemaphoreHandle_t _slots_lock;
 const int _number_of_closed_slots = CONFIG_LWIP_MAX_ACTIVE_TCP;
 static uint32_t _closed_slots[_number_of_closed_slots];
 static uint32_t _closed_index = []() {
