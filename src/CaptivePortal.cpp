@@ -11,7 +11,7 @@ const char* const TAG = "CaptivePortal";
 #include "Logging.h"
 #include "Time.h"
 
-#include <ESPAsyncWebServer.h>
+#include <external/AsyncWebServer/ESPAsyncWebServer.h>
 #include <WebSocketsServer.h>
 #include <WiFi.h>
 

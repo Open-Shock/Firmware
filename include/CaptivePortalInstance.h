@@ -4,7 +4,7 @@
 #include "WebSocketDeFragger.h"
 
 #include <DNSServer.h>
-#include <ESPAsyncWebServer.h>
+#include <external/AsyncWebServer/ESPAsyncWebServer.h>
 #include <LittleFS.h>
 #include <WebSocketsServer.h>
 
