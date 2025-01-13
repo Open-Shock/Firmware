@@ -26,8 +26,6 @@
 #define WS_MAX_QUEUED_MESSAGES 32
 #include <external/AsyncWebServer/ESPAsyncWebServer.h>
 
-#include "external/AsyncWebServer/AsyncWebSynchronization.h"
-
 #define DEFAULT_MAX_WS_CLIENTS 8
 #define WS_MAX_HEADER_LEN      16
 
@@ -268,7 +266,8 @@ private:
   uint32_t _cNextId;
   AwsEventHandler _eventHandler;
   bool _enabled;
-  AsyncWebLock _lock;
+  LinkedList<AsyncWebSocketMessageBuffer*> _buffers;
+  SemaphoreHandle_t _buffersLock;
 
 public:
   AsyncWebSocket(const String& url);
@@ -341,7 +340,6 @@ public:
   //  messagebuffer functions/objects.
   AsyncWebSocketMessageBuffer* makeBuffer(size_t size = 0);
   AsyncWebSocketMessageBuffer* makeBuffer(uint8_t* data, size_t size);
-  LinkedList<AsyncWebSocketMessageBuffer*> _buffers;
   void _cleanBuffers();
 
   AsyncWebSocketClientLinkedList getClients() const;

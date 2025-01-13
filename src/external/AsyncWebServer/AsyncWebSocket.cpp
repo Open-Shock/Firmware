@@ -876,7 +876,7 @@ void AsyncWebSocketClient::binary(AsyncWebSocketMessageBuffer* buffer)
 ip_addr_t AsyncWebSocketClient::remoteIP()
 {
   if (!_client) {
-    return ip_addr_t{};
+    return ip_addr_t {};
   }
   return _client->getRemoteAddress();
 }
@@ -899,6 +899,7 @@ AsyncWebSocket::AsyncWebSocket(const String& url)
   , _cNextId(1)
   , _enabled(true)
   , _buffers(LinkedList<AsyncWebSocketMessageBuffer*>([](AsyncWebSocketMessageBuffer* b) { delete b; }))
+  , _buffersLock(xSemaphoreCreateBinary())
 {
   _eventHandler = NULL;
 }
@@ -1245,8 +1246,9 @@ AsyncWebSocketMessageBuffer* AsyncWebSocket::makeBuffer(size_t size)
 {
   AsyncWebSocketMessageBuffer* buffer = new AsyncWebSocketMessageBuffer(size);
   if (buffer) {
-    AsyncWebLockGuard l(_lock);
+    xSemaphoreTake(_buffersLock, portMAX_DELAY);
     _buffers.add(buffer);
+    xSemaphoreGive(_buffersLock);
   }
   return buffer;
 }
@@ -1256,8 +1258,9 @@ AsyncWebSocketMessageBuffer* AsyncWebSocket::makeBuffer(uint8_t* data, size_t si
   AsyncWebSocketMessageBuffer* buffer = new AsyncWebSocketMessageBuffer(data, size);
 
   if (buffer) {
-    AsyncWebLockGuard l(_lock);
+    xSemaphoreTake(_buffersLock, portMAX_DELAY);
     _buffers.add(buffer);
+    xSemaphoreGive(_buffersLock);
   }
 
   return buffer;
@@ -1265,13 +1268,15 @@ AsyncWebSocketMessageBuffer* AsyncWebSocket::makeBuffer(uint8_t* data, size_t si
 
 void AsyncWebSocket::_cleanBuffers()
 {
-  AsyncWebLockGuard l(_lock);
+  xSemaphoreTake(_buffersLock, portMAX_DELAY);
 
   for (AsyncWebSocketMessageBuffer* c : _buffers) {
     if (c && c->canDelete()) {
       _buffers.remove(c);
     }
   }
+
+  xSemaphoreGive(_buffersLock);
 }
 
 AsyncWebSocket::AsyncWebSocketClientLinkedList AsyncWebSocket::getClients() const
