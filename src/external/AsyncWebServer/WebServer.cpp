@@ -23,12 +23,12 @@
 
 bool ON_STA_FILTER(AsyncWebServerRequest* request)
 {
-  return WiFi.localIP() == request->client()->localIP();
+  return (uint32_t)WiFi.localIP() == request->client()->getLocalAddress().u_addr.ip4.addr;
 }
 
 bool ON_AP_FILTER(AsyncWebServerRequest* request)
 {
-  return WiFi.localIP() != request->client()->localIP();
+  return (uint32_t)WiFi.localIP() != request->client()->getLocalAddress().u_addr.ip4.addr;
 }
 
 AsyncWebServer::AsyncWebServer(uint16_t port)

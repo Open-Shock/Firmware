@@ -873,12 +873,12 @@ void AsyncWebSocketClient::binary(AsyncWebSocketMessageBuffer* buffer)
   _queueMessage(new AsyncWebSocketMultiMessage(buffer, WS_BINARY));
 }
 
-IPAddress AsyncWebSocketClient::remoteIP()
+ip_addr_t AsyncWebSocketClient::remoteIP()
 {
   if (!_client) {
-    return IPAddress((uint32_t)0);
+    return ip_addr_t{};
   }
-  return _client->remoteIP();
+  return _client->getRemoteAddress();
 }
 
 uint16_t AsyncWebSocketClient::remotePort()
@@ -886,7 +886,7 @@ uint16_t AsyncWebSocketClient::remotePort()
   if (!_client) {
     return 0;
   }
-  return _client->remotePort();
+  return _client->getRemotePort();
 }
 
 /*

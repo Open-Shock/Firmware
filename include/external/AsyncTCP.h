@@ -22,11 +22,11 @@
 #ifndef ASYNCTCP_H_
 #define ASYNCTCP_H_
 
-#include "IPAddress.h"
 #include "sdkconfig.h"
 #include <functional>
 
 #include "freertos/semphr.h"
+#include "lwip/ip_addr.h"
 #include "lwip/pbuf.h"
 
 // If core is not defined, then we are running in Arduino or PIO
@@ -55,7 +55,6 @@ typedef std::function<void(void*, AsyncClient*, struct pbuf* pb)> AcPacketHandle
 typedef std::function<void(void*, AsyncClient*, uint32_t time)> AcTimeoutHandler;
 
 struct tcp_pcb;
-struct ip_addr;
 
 class AsyncClient {
 public:
@@ -68,7 +67,7 @@ public:
   bool operator==(const AsyncClient& other);
 
   bool operator!=(const AsyncClient& other) { return !(*this == other); }
-  bool connect(IPAddress ip, uint16_t port);
+  bool connect(ip_addr_t* addr, uint16_t port);
   bool connect(const char* host, uint16_t port);
   void close(bool now = false);
   void stop();
@@ -103,16 +102,10 @@ public:
   bool getNoDelay();
 
   void setKeepAlive(uint32_t ms, uint8_t cnt);
-  uint32_t getRemoteAddress();
+  ip_addr_t getRemoteAddress();
   uint16_t getRemotePort();
-  uint32_t getLocalAddress();
+  ip_addr_t getLocalAddress();
   uint16_t getLocalPort();
-
-  // compatibility
-  IPAddress remoteIP();
-  uint16_t remotePort();
-  IPAddress localIP();
-  uint16_t localPort();
 
   void onConnect(AcConnectHandler cb, void* arg = 0);     // on successful connect
   void onDisconnect(AcConnectHandler cb, void* arg = 0);  // disconnected
@@ -191,7 +184,7 @@ public:
 
 class AsyncServer {
 public:
-  AsyncServer(IPAddress addr, uint16_t port);
+  AsyncServer(const ip_addr_t* addr, uint16_t port);
   AsyncServer(uint16_t port);
   ~AsyncServer();
   void onClient(AcConnectHandler cb, void* arg);
@@ -207,7 +200,7 @@ public:
 
 protected:
   uint16_t _port;
-  IPAddress _addr;
+  ip_addr_t _addr;
   bool _noDelay;
   tcp_pcb* _pcb;
   AcConnectHandler _connect_cb;

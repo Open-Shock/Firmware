@@ -29,7 +29,7 @@
 #include "external/AsyncWebServer/AsyncWebSynchronization.h"
 
 #define DEFAULT_MAX_WS_CLIENTS 8
-#define WS_MAX_HEADER_LEN 16
+#define WS_MAX_HEADER_LEN      16
 
 class AsyncWebSocket;
 class AsyncWebSocketResponse;
@@ -212,7 +212,7 @@ public:
   AsyncWebSocket* server() { return _server; }
   AwsFrameInfo const& pinfo() const { return _pinfo; }
 
-  IPAddress remoteIP();
+  ip_addr_t remoteIP();
   uint16_t remotePort();
 
   // control frames
