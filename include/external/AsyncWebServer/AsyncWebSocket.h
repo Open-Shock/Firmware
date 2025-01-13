@@ -22,30 +22,13 @@
 #define ASYNCWEBSOCKET_H_
 
 #include <Arduino.h>
-#ifdef ESP32
 #include <external/AsyncTCP.h>
 #define WS_MAX_QUEUED_MESSAGES 32
-#else
-#include <external/ESPAsyncTCP.h>
-#define WS_MAX_QUEUED_MESSAGES 8
-#endif
 #include <external/AsyncWebServer/ESPAsyncWebServer.h>
 
 #include "external/AsyncWebServer/AsyncWebSynchronization.h"
 
-#ifdef ESP8266
-#include <Hash.h>
-#ifdef CRYPTO_HASH_h  // include Hash.h from espressif framework if the first include was from the crypto library
-#include <../src/Hash.h>
-#endif
-#endif
-
-#ifdef ESP32
 #define DEFAULT_MAX_WS_CLIENTS 8
-#else
-#define DEFAULT_MAX_WS_CLIENTS 4
-#endif
-
 #define WS_MAX_HEADER_LEN 16
 
 class AsyncWebSocket;
@@ -245,9 +228,6 @@ public:
   bool queueIsFull();
 
   size_t printf(const char* format, ...) __attribute__((format(printf, 2, 3)));
-#ifndef ESP32
-  size_t printf_P(PGM_P formatP, ...) __attribute__((format(printf, 2, 3)));
-#endif
   void text(const char* message, size_t len);
   void text(const char* message);
   void text(uint8_t* message, size_t len);
@@ -345,9 +325,6 @@ public:
 
   size_t printf(uint32_t id, const char* format, ...) __attribute__((format(printf, 3, 4)));
   size_t printfAll(const char* format, ...) __attribute__((format(printf, 2, 3)));
-#ifndef ESP32
-  size_t printf_P(uint32_t id, PGM_P formatP, ...) __attribute__((format(printf, 3, 4)));
-#endif
   size_t printfAll_P(PGM_P formatP, ...) __attribute__((format(printf, 2, 3)));
 
   // event listener

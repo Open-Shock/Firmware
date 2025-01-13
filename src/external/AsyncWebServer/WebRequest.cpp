@@ -21,10 +21,6 @@
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebResponseImpl.h"
 
-#ifndef ESP8266
-#define os_strlen strlen
-#endif
-
 static const String SharedEmptyString = String();
 
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
@@ -634,7 +630,7 @@ void AsyncWebServerRequest::_parseLine()
       _server->_attachHandler(this);
       if (_expectingContinue) {
         const char* response = "HTTP/1.1 100 Continue\r\n\r\n";
-        _client->write(response, os_strlen(response));
+        _client->write(response, strlen(response));
       }
       // check handler for authentication
       if (_contentLength) {
