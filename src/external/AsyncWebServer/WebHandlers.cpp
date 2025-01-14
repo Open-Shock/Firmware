@@ -55,15 +55,15 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setDefaultFile(const char* filenam
   return *this;
 }
 
-AsyncStaticWebHandler& AsyncStaticWebHandler::setCacheControl(const char* cache_control)
+AsyncStaticWebHandler& AsyncStaticWebHandler::setCacheControl(std::string_view cache_control)
 {
-  _cache_control = String(cache_control);
+  _cache_control = cache_control;
   return *this;
 }
 
-AsyncStaticWebHandler& AsyncStaticWebHandler::setSharedEtag(const char* etag)
+AsyncStaticWebHandler& AsyncStaticWebHandler::setSharedEtag(std::string_view etag)
 {
-  _shared_eTag = String(etag);
+  _shared_eTag = etag;
   return *this;
 }
 
@@ -105,7 +105,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
 
 #define FILE_IS_REAL(f) (f == true && !f.isDirectory())
 
-bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest* request, const String& path)
+bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest* request, std::string_view path)
 {
   String gzip = path + ".gz";
 
@@ -143,8 +143,8 @@ void AsyncStaticWebHandler::handleRequest(AsyncWebServerRequest* request)
   request->_tempObject = NULL;
 
   if (request->_tempFile == true) {
-    bool canCache = !_cache_control.isEmpty() && !_shared_eTag.isEmpty();
-    if (canCache && request->header("If-None-Match").equals(_shared_eTag)) {
+    bool canCache = !_cache_control.empty() && !_shared_eTag.empty();
+    if (canCache && request->header("If-None-Match") == _shared_eTag) {
       request->_tempFile.close();
       AsyncWebServerResponse* response = new AsyncBasicResponse(304);  // Not modified
       response->addHeader("Cache-Control", _cache_control);

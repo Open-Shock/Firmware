@@ -35,7 +35,7 @@ class AsyncStaticWebHandler : public AsyncWebHandler {
 
 private:
   bool _getFile(AsyncWebServerRequest* request);
-  bool _fileExists(AsyncWebServerRequest* request, const String& path);
+  bool _fileExists(AsyncWebServerRequest* request, std::string_view path);
   uint8_t _countBits(const uint8_t value) const;
 
 protected:
@@ -43,8 +43,8 @@ protected:
   String _uri;
   String _path;
   String _default_file;
-  String _cache_control;
-  String _shared_eTag;
+  std::string _cache_control;
+  std::string _shared_eTag;
   bool _isDir;
 
 public:
@@ -53,14 +53,14 @@ public:
   virtual void handleRequest(AsyncWebServerRequest* request) override final;
   AsyncStaticWebHandler& setIsDir(bool isDir);
   AsyncStaticWebHandler& setDefaultFile(const char* filename);
-  AsyncStaticWebHandler& setCacheControl(const char* cache_control);
-  AsyncStaticWebHandler& setSharedEtag(const char* etag);
+  AsyncStaticWebHandler& setCacheControl(std::string_view cache_control);
+  AsyncStaticWebHandler& setSharedEtag(std::string_view etag);
 };
 
 class AsyncCallbackWebHandler : public AsyncWebHandler {
 private:
 protected:
-  String _uri;
+  std::string _uri;
   WebRequestMethodComposite _method;
   ArRequestHandlerFunction _onRequest;
   ArUploadHandlerFunction _onUpload;
@@ -77,10 +77,10 @@ public:
     , _isRegex(false)
   {
   }
-  void setUri(const String& uri)
+  void setUri(std::string_view uri)
   {
     _uri     = uri;
-    _isRegex = uri.startsWith("^") && uri.endsWith("$");
+    _isRegex = uri.length() > 1 && uri.front() == '^' && uri.back() == '$';
   }
   void setMethod(WebRequestMethodComposite method) { _method = method; }
   void onRequest(ArRequestHandlerFunction fn) { _onRequest = fn; }
@@ -129,7 +129,7 @@ public:
     else
       request->send(500);
   }
-  virtual void handleUpload(AsyncWebServerRequest* request, const String& filename, size_t index, uint8_t* data, size_t len, bool final) override final
+  virtual void handleUpload(AsyncWebServerRequest* request, std::string_view filename, size_t index, uint8_t* data, size_t len, bool final) override final
   {
     if (_onUpload) _onUpload(request, filename, index, data, len, final);
   }

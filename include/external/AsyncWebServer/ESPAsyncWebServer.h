@@ -27,9 +27,13 @@
 #include <functional>
 
 #include "LinkedList.h"
+#include "util/StringUtils.h"
 
 #include <external/AsyncTCP.h>
 #include <WiFi.h>
+
+#include <string>
+#include <string_view>
 
 #ifdef ASYNCWEBSERVER_REGEX
 #define ASYNCWEBSERVER_REGEX_ATTRIBUTE
@@ -74,14 +78,14 @@ typedef std::function<void(void)> ArDisconnectHandler;
 
 class AsyncWebParameter {
 private:
-  String _name;
-  String _value;
+  std::string _name;
+  std::string _value;
   size_t _size;
   bool _isForm;
   bool _isFile;
 
 public:
-  AsyncWebParameter(const String& name, const String& value, bool form = false, bool file = false, size_t size = 0)
+  AsyncWebParameter(std::string_view name, std::string_view value, bool form = false, bool file = false, size_t size = 0)
     : _name(name)
     , _value(value)
     , _size(size)
@@ -89,8 +93,8 @@ public:
     , _isFile(file)
   {
   }
-  const String& name() const { return _name; }
-  const String& value() const { return _value; }
+  const std::string& name() const { return _name; }
+  const std::string& value() const { return _value; }
   size_t size() const { return _size; }
   bool isPost() const { return _isForm; }
   bool isFile() const { return _isFile; }
@@ -102,29 +106,31 @@ public:
 
 class AsyncWebHeader {
 private:
-  String _name;
-  String _value;
+  std::string _name;
+  std::string _value;
 
 public:
-  AsyncWebHeader(const String& name, const String& value)
+  AsyncWebHeader(std::string_view name, std::string_view value)
     : _name(name)
     , _value(value)
   {
   }
-  AsyncWebHeader(const String& data)
+  AsyncWebHeader(std::string_view data)
     : _name()
     , _value()
   {
-    if (!data) return;
-    int index = data.indexOf(':');
-    if (index < 0) return;
-    _name  = data.substring(0, index);
-    _value = data.substring(index + 2);
+    if (data.empty()) return;
+
+    auto index = data.find(':');
+    if (index == std::string_view::npos) return;
+
+    _name  = data.substr(0, index);
+    _value = OpenShock::StringTrim(data.substr(index));
   }
   ~AsyncWebHeader() { }
-  const String& name() const { return _name; }
-  const String& value() const { return _value; }
-  String toString() const { return String(_name + ": " + _value + "\r\n"); }
+  const std::string& name() const { return _name; }
+  const std::string& value() const { return _value; }
+  std::string toString() const { return std::string(_name + ": " + _value + "\r\n"); }
 };
 
 /*
@@ -155,16 +161,16 @@ private:
   AsyncWebServerResponse* _response;
   ArDisconnectHandler _onDisconnectfn;
 
-  String _temp;
+  std::string _temp;
   uint8_t _parseState;
 
   uint8_t _version;
   WebRequestMethodComposite _method;
-  String _url;
-  String _host;
-  String _contentType;
-  String _boundary;
-  String _authorization;
+  std::string _url;
+  std::string _host;
+  std::string _contentType;
+  std::string _boundary;
+  std::string _authorization;
   RequestedConnectionType _reqconntype;
   bool _isDigest;
   bool _isMultipart;
@@ -175,16 +181,16 @@ private:
 
   LinkedList<AsyncWebHeader*> _headers;
   LinkedList<AsyncWebParameter*> _params;
-  LinkedList<String*> _pathParams;
+  LinkedList<std::string*> _pathParams;
 
   uint8_t _multiParseState;
   uint8_t _boundaryPosition;
   size_t _itemStartIndex;
   size_t _itemSize;
-  String _itemName;
-  String _itemFilename;
-  String _itemType;
-  String _itemValue;
+  std::string _itemName;
+  std::string _itemFilename;
+  std::string _itemType;
+  std::string _itemValue;
   uint8_t* _itemBuffer;
   size_t _itemBufferIndex;
   bool _itemIsFile;
@@ -204,7 +210,7 @@ private:
   void _parseLine();
   void _parsePlainPostChar(uint8_t data);
   void _parseMultipartPostByte(uint8_t data, bool last);
-  void _addGetParams(const String& params);
+  void _addGetParams(std::string_view params);
 
   void _handleUploadStart();
   void _handleUploadByte(uint8_t data, bool last);
@@ -220,9 +226,9 @@ public:
   AsyncClient* client() { return _client; }
   uint8_t version() const { return _version; }
   WebRequestMethodComposite method() const { return _method; }
-  const String& url() const { return _url; }
-  const String& host() const { return _host; }
-  const String& contentType() const { return _contentType; }
+  const std::string& url() const { return _url; }
+  const std::string& host() const { return _host; }
+  const std::string& contentType() const { return _contentType; }
   size_t contentLength() const { return _contentLength; }
   bool multipart() const { return _isMultipart; }
   const char* methodToString() const;
@@ -233,59 +239,52 @@ public:
 
   void setHandler(AsyncWebHandler* handler) { _handler = handler; }
 
-  void redirect(const String& url);
+  void redirect(std::string_view url);
 
   void send(AsyncWebServerResponse* response);
-  void send(int code, const String& contentType = String(), const String& content = String());
-  void send(FS& fs, const String& path, const String& contentType = String(), bool download = false);
-  void send(File content, const String& path, const String& contentType = String(), bool download = false);
-  void send(Stream& stream, const String& contentType, size_t len);
-  void send(const String& contentType, size_t len, AwsResponseFiller callback);
-  void sendChunked(const String& contentType, AwsResponseFiller callback);
-  void send_P(int code, const String& contentType, const uint8_t* content, size_t len);
-  void send_P(int code, const String& contentType, PGM_P content);
+  void send(int code, std::string_view contentType = {}, std::string_view content = {});
+  void send(FS& fs, std::string_view path, std::string_view contentType = {}, bool download = false);
+  void send(File content, std::string_view path, std::string_view contentType = {}, bool download = false);
+  void send(Stream& stream, std::string_view contentType, size_t len);
+  void send(std::string_view contentType, size_t len, AwsResponseFiller callback);
+  void sendChunked(std::string_view contentType, AwsResponseFiller callback);
+  void send_P(int code, std::string_view contentType, const uint8_t* content, size_t len);
+  void send_P(int code, std::string_view contentType, PGM_P content);
 
-  AsyncWebServerResponse* beginResponse(int code, const String& contentType = String(), const String& content = String());
-  AsyncWebServerResponse* beginResponse(FS& fs, const String& path, const String& contentType = String(), bool download = false);
-  AsyncWebServerResponse* beginResponse(File content, const String& path, const String& contentType = String(), bool download = false);
-  AsyncWebServerResponse* beginResponse(Stream& stream, const String& contentType, size_t len);
-  AsyncWebServerResponse* beginResponse(const String& contentType, size_t len, AwsResponseFiller callback);
-  AsyncWebServerResponse* beginChunkedResponse(const String& contentType, AwsResponseFiller callback);
-  AsyncResponseStream* beginResponseStream(const String& contentType, size_t bufferSize = 1460);
-  AsyncWebServerResponse* beginResponse_P(int code, const String& contentType, const uint8_t* content, size_t len);
-  AsyncWebServerResponse* beginResponse_P(int code, const String& contentType, PGM_P content);
+  AsyncWebServerResponse* beginResponse(int code, std::string_view contentType = {}, std::string_view content = {});
+  AsyncWebServerResponse* beginResponse(FS& fs, std::string_view path, std::string_view contentType = {}, bool download = false);
+  AsyncWebServerResponse* beginResponse(File content, std::string_view path, std::string_view contentType = {}, bool download = false);
+  AsyncWebServerResponse* beginResponse(Stream& stream, std::string_view contentType, size_t len);
+  AsyncWebServerResponse* beginResponse(std::string_view contentType, size_t len, AwsResponseFiller callback);
+  AsyncWebServerResponse* beginChunkedResponse(std::string_view contentType, AwsResponseFiller callback);
+  AsyncResponseStream* beginResponseStream(std::string_view contentType, size_t bufferSize = 1460);
+  AsyncWebServerResponse* beginResponse_P(int code, std::string_view contentType, const uint8_t* content, size_t len);
+  AsyncWebServerResponse* beginResponse_P(int code, std::string_view contentType, PGM_P content);
 
-  size_t headers() const;                                 // get header count
-  bool hasHeader(const String& name) const;               // check if header exists
-  bool hasHeader(const __FlashStringHelper* data) const;  // check if header exists
+  size_t headers() const;                       // get header count
+  bool hasHeader(std::string_view name) const;  // check if header exists
 
-  AsyncWebHeader* getHeader(const String& name) const;
-  AsyncWebHeader* getHeader(const __FlashStringHelper* data) const;
+  AsyncWebHeader* getHeader(std::string_view name) const;
   AsyncWebHeader* getHeader(size_t num) const;
 
   size_t params() const;  // get arguments count
-  bool hasParam(const String& name, bool post = false, bool file = false) const;
-  bool hasParam(const __FlashStringHelper* data, bool post = false, bool file = false) const;
+  bool hasParam(std::string_view name, bool post = false, bool file = false) const;
 
-  AsyncWebParameter* getParam(const String& name, bool post = false, bool file = false) const;
-  AsyncWebParameter* getParam(const __FlashStringHelper* data, bool post, bool file) const;
+  AsyncWebParameter* getParam(std::string_view name, bool post = false, bool file = false) const;
   AsyncWebParameter* getParam(size_t num) const;
 
-  size_t args() const { return params(); }                   // get arguments count
-  const String& arg(const String& name) const;               // get request argument value by name
-  const String& arg(const __FlashStringHelper* data) const;  // get request argument value by F(name)
-  const String& arg(size_t i) const;                         // get request argument value by number
-  const String& argName(size_t i) const;                     // get request argument name by number
-  bool hasArg(const char* name) const;                       // check if argument exists
-  bool hasArg(const __FlashStringHelper* data) const;        // check if F(argument) exists
+  size_t args() const { return params(); }              // get arguments count
+  const std::string& arg(std::string_view name) const;  // get request argument value by name
+  const std::string& arg(size_t i) const;               // get request argument value by number
+  const std::string& argName(size_t i) const;           // get request argument name by number
+  bool hasArg(const char* name) const;                  // check if argument exists
 
-  const String& ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(size_t i) const;
+  const std::string& ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(size_t i) const;
 
-  const String& header(const char* name) const;                 // get request header value by name
-  const String& header(const __FlashStringHelper* data) const;  // get request header value by F(name)
-  const String& header(size_t i) const;                         // get request header value by number
-  const String& headerName(size_t i) const;                     // get request header name by number
-  String urlDecode(const String& text) const;
+  const std::string& header(const char* name) const;  // get request header value by name
+  const std::string& header(size_t i) const;          // get request header value by number
+  const std::string& headerName(size_t i) const;      // get request header name by number
+  String urlDecode(std::string_view text) const;
 };
 
 /*
@@ -318,7 +317,12 @@ public:
   virtual bool canHandle(AsyncWebServerRequest* request __attribute__((unused))) { return false; }
   virtual void handleRequest(AsyncWebServerRequest* request __attribute__((unused))) { }
   virtual void handleUpload(
-    AsyncWebServerRequest* request __attribute__((unused)), const String& filename __attribute__((unused)), size_t index __attribute__((unused)), uint8_t* data __attribute__((unused)), size_t len __attribute__((unused)), bool final __attribute__((unused))
+    AsyncWebServerRequest* request __attribute__((unused)),
+    std::string_view filename __attribute__((unused)),
+    size_t index __attribute__((unused)),
+    uint8_t* data __attribute__((unused)),
+    size_t len __attribute__((unused)),
+    bool final __attribute__((unused))
   )
   {
   }
@@ -343,7 +347,7 @@ class AsyncWebServerResponse {
 protected:
   int _code;
   LinkedList<AsyncWebHeader*> _headers;
-  String _contentType;
+  std::string _contentType;
   size_t _contentLength;
   bool _sendContentLength;
   bool _chunked;
@@ -359,9 +363,9 @@ public:
   virtual ~AsyncWebServerResponse();
   virtual void setCode(int code);
   virtual void setContentLength(size_t len);
-  virtual void setContentType(const String& type);
-  virtual void addHeader(const String& name, const String& value);
-  virtual String _assembleHead(uint8_t version);
+  virtual void setContentType(std::string_view type);
+  virtual void addHeader(std::string_view name, std::string_view value);
+  virtual std::string _assembleHead(uint8_t version);
   virtual bool _started() const;
   virtual bool _finished() const;
   virtual bool _failed() const;
@@ -375,7 +379,7 @@ public:
  * */
 
 typedef std::function<void(AsyncWebServerRequest* request)> ArRequestHandlerFunction;
-typedef std::function<void(AsyncWebServerRequest* request, const String& filename, size_t index, uint8_t* data, size_t len, bool final)> ArUploadHandlerFunction;
+typedef std::function<void(AsyncWebServerRequest* request, std::string_view filename, size_t index, uint8_t* data, size_t len, bool final)> ArUploadHandlerFunction;
 typedef std::function<void(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total)> ArBodyHandlerFunction;
 
 class AsyncWebServer {
@@ -428,7 +432,7 @@ class DefaultHeaders {
 public:
   using ConstIterator = headers_t::ConstIterator;
 
-  void addHeader(const String& name, const String& value) { _headers.add(new AsyncWebHeader(name, value)); }
+  void addHeader(const std::string& name, const std::string& value) { _headers.add(new AsyncWebHeader(name, value)); }
 
   ConstIterator begin() const { return _headers.begin(); }
   ConstIterator end() const { return _headers.end(); }

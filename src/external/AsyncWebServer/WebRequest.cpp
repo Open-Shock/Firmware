@@ -21,7 +21,7 @@
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebResponseImpl.h"
 
-static const String SharedEmptyString = String();
+static const std::string SharedEmptyString = std::string();
 
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
 
@@ -138,12 +138,12 @@ void AsyncWebServerRequest::_onData(void* buf, size_t len)
         char ch      = str[len - 1];
         str[len - 1] = 0;
         _temp.reserve(_temp.length() + len);
-        _temp.concat(str);
-        _temp.concat(ch);
-      } else {       // Found new line - extract it and parse
-        str[i] = 0;  // Terminate the string at the end of the line.
-        _temp.concat(str);
-        _temp.trim();
+        _temp += str;
+        _temp += ch;
+      } else {                                 // Found new line - extract it and parse
+        str[i] = 0;                            // Terminate the string at the end of the line.
+        _temp += str;
+        _temp = OpenShock::StringTrim(_temp);  // TODO: This can be optimized if only right side needs trim
         _parseLine();
         if (++i < len) {
           // Still have more buffer to process
@@ -270,7 +270,7 @@ void AsyncWebServerRequest::_addPathParam(const char* p)
   _pathParams.add(new String(p));
 }
 
-void AsyncWebServerRequest::_addGetParams(const String& params)
+void AsyncWebServerRequest::_addGetParams(std::string_view params)
 {
   size_t start = 0;
   while (start < params.length()) {
@@ -441,7 +441,7 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
 
   if (!_parsedLength) {
     _multiParseState = EXPECT_BOUNDARY;
-    _temp            = String();
+    _temp            = std::string();
     _itemName        = String();
     _itemFilename    = String();
     _itemType        = String();
@@ -651,59 +651,24 @@ size_t AsyncWebServerRequest::headers() const
   return _headers.length();
 }
 
-bool AsyncWebServerRequest::hasHeader(const String& name) const
+bool AsyncWebServerRequest::hasHeader(std::string_view name) const
 {
   for (const auto& h : _headers) {
-    if (h->name().equalsIgnoreCase(name)) {
+    if (OpenShock::StringIEquals(h->name(), name)) {
       return true;
     }
   }
   return false;
 }
 
-bool AsyncWebServerRequest::hasHeader(const __FlashStringHelper* data) const
-{
-  PGM_P p  = reinterpret_cast<PGM_P>(data);
-  size_t n = 0;
-  while (1) {
-    if (pgm_read_byte(p + n) == 0) break;
-    n += 1;
-  }
-  char* name = (char*)malloc(n + 1);
-  name[n]    = 0;
-  if (name) {
-    for (size_t b = 0; b < n; b++) name[b] = pgm_read_byte(p++);
-    bool result = hasHeader(String(name));
-    free(name);
-    return result;
-  } else {
-    return false;
-  }
-}
-
-AsyncWebHeader* AsyncWebServerRequest::getHeader(const String& name) const
+AsyncWebHeader* AsyncWebServerRequest::getHeader(std::string_view name) const
 {
   for (const auto& h : _headers) {
-    if (h->name().equalsIgnoreCase(name)) {
+    if (OpenShock::StringIEquals(h->name(), name)) {
       return h;
     }
   }
   return nullptr;
-}
-
-AsyncWebHeader* AsyncWebServerRequest::getHeader(const __FlashStringHelper* data) const
-{
-  PGM_P p    = reinterpret_cast<PGM_P>(data);
-  size_t n   = strlen_P(p);
-  char* name = (char*)malloc(n + 1);
-  if (name) {
-    strcpy_P(name, p);
-    AsyncWebHeader* result = getHeader(String(name));
-    free(name);
-    return result;
-  } else {
-    return nullptr;
-  }
 }
 
 AsyncWebHeader* AsyncWebServerRequest::getHeader(size_t num) const
@@ -717,7 +682,7 @@ size_t AsyncWebServerRequest::params() const
   return _params.length();
 }
 
-bool AsyncWebServerRequest::hasParam(const String& name, bool post, bool file) const
+bool AsyncWebServerRequest::hasParam(std::string_view name, bool post, bool file) const
 {
   for (const auto& p : _params) {
     if (p->name() == name && p->isPost() == post && p->isFile() == file) {
@@ -727,24 +692,7 @@ bool AsyncWebServerRequest::hasParam(const String& name, bool post, bool file) c
   return false;
 }
 
-bool AsyncWebServerRequest::hasParam(const __FlashStringHelper* data, bool post, bool file) const
-{
-  PGM_P p  = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p);
-
-  char* name = (char*)malloc(n + 1);
-  name[n]    = 0;
-  if (name) {
-    strcpy_P(name, p);
-    bool result = hasParam(name, post, file);
-    free(name);
-    return result;
-  } else {
-    return false;
-  }
-}
-
-AsyncWebParameter* AsyncWebServerRequest::getParam(const String& name, bool post, bool file) const
+AsyncWebParameter* AsyncWebServerRequest::getParam(std::string_view name, bool post, bool file) const
 {
   for (const auto& p : _params) {
     if (p->name() == name && p->isPost() == post && p->isFile() == file) {
@@ -752,21 +700,6 @@ AsyncWebParameter* AsyncWebServerRequest::getParam(const String& name, bool post
     }
   }
   return nullptr;
-}
-
-AsyncWebParameter* AsyncWebServerRequest::getParam(const __FlashStringHelper* data, bool post, bool file) const
-{
-  PGM_P p    = reinterpret_cast<PGM_P>(data);
-  size_t n   = strlen_P(p);
-  char* name = (char*)malloc(n + 1);
-  if (name) {
-    strcpy_P(name, p);
-    AsyncWebParameter* result = getParam(name, post, file);
-    free(name);
-    return result;
-  } else {
-    return nullptr;
-  }
 }
 
 AsyncWebParameter* AsyncWebServerRequest::getParam(size_t num) const
@@ -793,60 +726,60 @@ void AsyncWebServerRequest::send(AsyncWebServerResponse* response)
   }
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(int code, const String& contentType, const String& content)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(int code, std::string_view contentType, std::string_view content)
 {
   return new AsyncBasicResponse(code, contentType, content);
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(FS& fs, const String& path, const String& contentType, bool download)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(FS& fs, std::string_view path, std::string_view contentType, bool download)
 {
   if (fs.exists(path) || (!download && fs.exists(path + ".gz"))) return new AsyncFileResponse(fs, path, contentType, download);
   return NULL;
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(File content, const String& path, const String& contentType, bool download)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(File content, std::string_view path, std::string_view contentType, bool download)
 {
   if (content == true) return new AsyncFileResponse(content, path, contentType, download);
   return NULL;
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(Stream& stream, const String& contentType, size_t len)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(Stream& stream, std::string_view contentType, size_t len)
 {
   return new AsyncStreamResponse(stream, contentType, len);
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(const String& contentType, size_t len, AwsResponseFiller callback)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(std::string_view contentType, size_t len, AwsResponseFiller callback)
 {
   return new AsyncCallbackResponse(contentType, len, callback);
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginChunkedResponse(const String& contentType, AwsResponseFiller callback)
+AsyncWebServerResponse* AsyncWebServerRequest::beginChunkedResponse(std::string_view contentType, AwsResponseFiller callback)
 {
   if (_version) return new AsyncChunkedResponse(contentType, callback);
   return new AsyncCallbackResponse(contentType, 0, callback);
 }
 
-AsyncResponseStream* AsyncWebServerRequest::beginResponseStream(const String& contentType, size_t bufferSize)
+AsyncResponseStream* AsyncWebServerRequest::beginResponseStream(std::string_view contentType, size_t bufferSize)
 {
   return new AsyncResponseStream(contentType, bufferSize);
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse_P(int code, const String& contentType, const uint8_t* content, size_t len)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse_P(int code, std::string_view contentType, const uint8_t* content, size_t len)
 {
   return new AsyncProgmemResponse(code, contentType, content, len);
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse_P(int code, const String& contentType, PGM_P content)
+AsyncWebServerResponse* AsyncWebServerRequest::beginResponse_P(int code, std::string_view contentType, PGM_P content)
 {
   return beginResponse_P(code, contentType, (const uint8_t*)content, strlen_P(content));
 }
 
-void AsyncWebServerRequest::send(int code, const String& contentType, const String& content)
+void AsyncWebServerRequest::send(int code, std::string_view contentType, std::string_view content)
 {
   send(beginResponse(code, contentType, content));
 }
 
-void AsyncWebServerRequest::send(FS& fs, const String& path, const String& contentType, bool download)
+void AsyncWebServerRequest::send(FS& fs, std::string_view path, std::string_view contentType, bool download)
 {
   if (fs.exists(path) || (!download && fs.exists(path + ".gz"))) {
     send(beginResponse(fs, path, contentType, download));
@@ -854,7 +787,7 @@ void AsyncWebServerRequest::send(FS& fs, const String& path, const String& conte
     send(404);
 }
 
-void AsyncWebServerRequest::send(File content, const String& path, const String& contentType, bool download)
+void AsyncWebServerRequest::send(File content, std::string_view path, std::string_view contentType, bool download)
 {
   if (content == true) {
     send(beginResponse(content, path, contentType, download));
@@ -862,32 +795,32 @@ void AsyncWebServerRequest::send(File content, const String& path, const String&
     send(404);
 }
 
-void AsyncWebServerRequest::send(Stream& stream, const String& contentType, size_t len)
+void AsyncWebServerRequest::send(Stream& stream, std::string_view contentType, size_t len)
 {
   send(beginResponse(stream, contentType, len));
 }
 
-void AsyncWebServerRequest::send(const String& contentType, size_t len, AwsResponseFiller callback)
+void AsyncWebServerRequest::send(std::string_view contentType, size_t len, AwsResponseFiller callback)
 {
   send(beginResponse(contentType, len, callback));
 }
 
-void AsyncWebServerRequest::sendChunked(const String& contentType, AwsResponseFiller callback)
+void AsyncWebServerRequest::sendChunked(std::string_view contentType, AwsResponseFiller callback)
 {
   send(beginChunkedResponse(contentType, callback));
 }
 
-void AsyncWebServerRequest::send_P(int code, const String& contentType, const uint8_t* content, size_t len)
+void AsyncWebServerRequest::send_P(int code, std::string_view contentType, const uint8_t* content, size_t len)
 {
   send(beginResponse_P(code, contentType, content, len));
 }
 
-void AsyncWebServerRequest::send_P(int code, const String& contentType, PGM_P content)
+void AsyncWebServerRequest::send_P(int code, std::string_view contentType, PGM_P content)
 {
   send(beginResponse_P(code, contentType, content));
 }
 
-void AsyncWebServerRequest::redirect(const String& url)
+void AsyncWebServerRequest::redirect(std::string_view url)
 {
   AsyncWebServerResponse* response = beginResponse(302);
   response->addHeader("Location", url);
@@ -904,22 +837,7 @@ bool AsyncWebServerRequest::hasArg(const char* name) const
   return false;
 }
 
-bool AsyncWebServerRequest::hasArg(const __FlashStringHelper* data) const
-{
-  PGM_P p    = reinterpret_cast<PGM_P>(data);
-  size_t n   = strlen_P(p);
-  char* name = (char*)malloc(n + 1);
-  if (name) {
-    strcpy_P(name, p);
-    bool result = hasArg(name);
-    free(name);
-    return result;
-  } else {
-    return false;
-  }
-}
-
-const String& AsyncWebServerRequest::arg(const String& name) const
+const std::string& AsyncWebServerRequest::arg(std::string_view name) const
 {
   for (const auto& arg : _params) {
     if (arg->name() == name) {
@@ -929,71 +847,41 @@ const String& AsyncWebServerRequest::arg(const String& name) const
   return SharedEmptyString;
 }
 
-const String& AsyncWebServerRequest::arg(const __FlashStringHelper* data) const
-{
-  PGM_P p    = reinterpret_cast<PGM_P>(data);
-  size_t n   = strlen_P(p);
-  char* name = (char*)malloc(n + 1);
-  if (name) {
-    strcpy_P(name, p);
-    const String& result = arg(String(name));
-    free(name);
-    return result;
-  } else {
-    return SharedEmptyString;
-  }
-}
-
-const String& AsyncWebServerRequest::arg(size_t i) const
+const std::string& AsyncWebServerRequest::arg(size_t i) const
 {
   return getParam(i)->value();
 }
 
-const String& AsyncWebServerRequest::argName(size_t i) const
+const std::string& AsyncWebServerRequest::argName(size_t i) const
 {
   return getParam(i)->name();
 }
 
-const String& AsyncWebServerRequest::pathArg(size_t i) const
+const std::string& AsyncWebServerRequest::pathArg(size_t i) const
 {
   auto param = _pathParams.nth(i);
   return param ? **param : SharedEmptyString;
 }
 
-const String& AsyncWebServerRequest::header(const char* name) const
+const std::string& AsyncWebServerRequest::header(const char* name) const
 {
-  AsyncWebHeader* h = getHeader(String(name));
+  AsyncWebHeader* h = getHeader(name);
   return h ? h->value() : SharedEmptyString;
 }
 
-const String& AsyncWebServerRequest::header(const __FlashStringHelper* data) const
-{
-  PGM_P p    = reinterpret_cast<PGM_P>(data);
-  size_t n   = strlen_P(p);
-  char* name = (char*)malloc(n + 1);
-  if (name) {
-    strcpy_P(name, p);
-    const String& result = header((const char*)name);
-    free(name);
-    return result;
-  } else {
-    return SharedEmptyString;
-  }
-};
-
-const String& AsyncWebServerRequest::header(size_t i) const
+const std::string& AsyncWebServerRequest::header(size_t i) const
 {
   AsyncWebHeader* h = getHeader(i);
   return h ? h->value() : SharedEmptyString;
 }
 
-const String& AsyncWebServerRequest::headerName(size_t i) const
+const std::string& AsyncWebServerRequest::headerName(size_t i) const
 {
   AsyncWebHeader* h = getHeader(i);
   return h ? h->name() : SharedEmptyString;
 }
 
-String AsyncWebServerRequest::urlDecode(const String& text) const
+String AsyncWebServerRequest::urlDecode(std::string_view text) const
 {
   char temp[]      = "0x00";
   unsigned int len = text.length();

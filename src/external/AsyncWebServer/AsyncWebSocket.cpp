@@ -21,9 +21,9 @@
 #include "external/AsyncWebServer/AsyncWebSocket.h"
 #include "Arduino.h"
 
-#include <libb64/cencode.h>
-
-#include "mbedtls/sha1.h"
+#include "Convert.h"
+#include "Hashing.h"
+#include "util/Base64Utils.h"
 
 #define MAX_PRINTF_LEN 64
 
@@ -801,37 +801,13 @@ void AsyncWebSocketClient::text(const char* message, size_t len)
 {
   _queueMessage(new AsyncWebSocketBasicMessage(message, len));
 }
-void AsyncWebSocketClient::text(const char* message)
-{
-  text(message, strlen(message));
-}
 void AsyncWebSocketClient::text(uint8_t* message, size_t len)
 {
   text((const char*)message, len);
 }
-void AsyncWebSocketClient::text(char* message)
+void AsyncWebSocketClient::text(std::string_view message)
 {
-  text(message, strlen(message));
-}
-void AsyncWebSocketClient::text(const String& message)
-{
-  text(message.c_str(), message.length());
-}
-void AsyncWebSocketClient::text(const __FlashStringHelper* data)
-{
-  PGM_P p  = reinterpret_cast<PGM_P>(data);
-  size_t n = 0;
-  while (1) {
-    if (pgm_read_byte(p + n) == 0) break;
-    n += 1;
-  }
-  char* message = (char*)malloc(n + 1);
-  if (message) {
-    for (size_t b = 0; b < n; b++) message[b] = pgm_read_byte(p++);
-    message[n] = 0;
-    text(message, n);
-    free(message);
-  }
+  text(message.data(), message.length());
 }
 void AsyncWebSocketClient::text(AsyncWebSocketMessageBuffer* buffer)
 {
@@ -842,31 +818,13 @@ void AsyncWebSocketClient::binary(const char* message, size_t len)
 {
   _queueMessage(new AsyncWebSocketBasicMessage(message, len, WS_BINARY));
 }
-void AsyncWebSocketClient::binary(const char* message)
-{
-  binary(message, strlen(message));
-}
 void AsyncWebSocketClient::binary(uint8_t* message, size_t len)
 {
   binary((const char*)message, len);
 }
-void AsyncWebSocketClient::binary(char* message)
+void AsyncWebSocketClient::binary(std::string_view message)
 {
-  binary(message, strlen(message));
-}
-void AsyncWebSocketClient::binary(const String& message)
-{
-  binary(message.c_str(), message.length());
-}
-void AsyncWebSocketClient::binary(const __FlashStringHelper* data, size_t len)
-{
-  PGM_P p       = reinterpret_cast<PGM_P>(data);
-  char* message = (char*)malloc(len);
-  if (message) {
-    for (size_t b = 0; b < len; b++) message[b] = pgm_read_byte(p++);
-    binary(message, len);
-    free(message);
-  }
+  binary(message.data(), message.length());
 }
 void AsyncWebSocketClient::binary(AsyncWebSocketMessageBuffer* buffer)
 {
@@ -893,7 +851,7 @@ uint16_t AsyncWebSocketClient::remotePort()
  * Async Web Socket - Each separate socket location
  */
 
-AsyncWebSocket::AsyncWebSocket(const String& url)
+AsyncWebSocket::AsyncWebSocket(std::string_view url)
   : _url(url)
   , _clients(LinkedList<AsyncWebSocketClient*>([](AsyncWebSocketClient* c) { delete c; }))
   , _cNextId(1)
@@ -1114,107 +1072,55 @@ size_t AsyncWebSocket::printfAll_P(PGM_P formatP, ...)
   return len;
 }
 
-void AsyncWebSocket::text(uint32_t id, const char* message)
-{
-  text(id, message, strlen(message));
-}
 void AsyncWebSocket::text(uint32_t id, uint8_t* message, size_t len)
 {
   text(id, (const char*)message, len);
 }
-void AsyncWebSocket::text(uint32_t id, char* message)
+void AsyncWebSocket::text(uint32_t id, std::string_view message)
 {
-  text(id, message, strlen(message));
-}
-void AsyncWebSocket::text(uint32_t id, const String& message)
-{
-  text(id, message.c_str(), message.length());
-}
-void AsyncWebSocket::text(uint32_t id, const __FlashStringHelper* message)
-{
-  AsyncWebSocketClient* c = client(id);
-  if (c != NULL) c->text(message);
-}
-void AsyncWebSocket::textAll(const char* message)
-{
-  textAll(message, strlen(message));
+  text(id, message.data(), message.length());
 }
 void AsyncWebSocket::textAll(uint8_t* message, size_t len)
 {
   textAll((const char*)message, len);
 }
-void AsyncWebSocket::textAll(char* message)
+void AsyncWebSocket::textAll(std::string_view message)
 {
-  textAll(message, strlen(message));
-}
-void AsyncWebSocket::textAll(const String& message)
-{
-  textAll(message.c_str(), message.length());
-}
-void AsyncWebSocket::textAll(const __FlashStringHelper* message)
-{
-  for (const auto& c : _clients) {
-    if (c->status() == WS_CONNECTED) c->text(message);
-  }
-}
-void AsyncWebSocket::binary(uint32_t id, const char* message)
-{
-  binary(id, message, strlen(message));
+  textAll(message.data(), message.length());
 }
 void AsyncWebSocket::binary(uint32_t id, uint8_t* message, size_t len)
 {
   binary(id, (const char*)message, len);
 }
-void AsyncWebSocket::binary(uint32_t id, char* message)
+void AsyncWebSocket::binary(uint32_t id, std::string_view message)
 {
-  binary(id, message, strlen(message));
-}
-void AsyncWebSocket::binary(uint32_t id, const String& message)
-{
-  binary(id, message.c_str(), message.length());
-}
-void AsyncWebSocket::binary(uint32_t id, const __FlashStringHelper* message, size_t len)
-{
-  AsyncWebSocketClient* c = client(id);
-  if (c != NULL) c->binary(message, len);
-}
-void AsyncWebSocket::binaryAll(const char* message)
-{
-  binaryAll(message, strlen(message));
+  binary(id, message.data(), message.length());
 }
 void AsyncWebSocket::binaryAll(uint8_t* message, size_t len)
 {
   binaryAll((const char*)message, len);
 }
-void AsyncWebSocket::binaryAll(char* message)
+void AsyncWebSocket::binaryAll(std::string_view message)
 {
-  binaryAll(message, strlen(message));
-}
-void AsyncWebSocket::binaryAll(const String& message)
-{
-  binaryAll(message.c_str(), message.length());
-}
-void AsyncWebSocket::binaryAll(const __FlashStringHelper* message, size_t len)
-{
-  for (const auto& c : _clients) {
-    if (c->status() == WS_CONNECTED) c->binary(message, len);
-  }
+  binaryAll(message.data(), message.length());
 }
 
-const char* WS_STR_CONNECTION = "Connection";
-const char* WS_STR_UPGRADE    = "Upgrade";
-const char* WS_STR_ORIGIN     = "Origin";
-const char* WS_STR_VERSION    = "Sec-WebSocket-Version";
-const char* WS_STR_KEY        = "Sec-WebSocket-Key";
-const char* WS_STR_PROTOCOL   = "Sec-WebSocket-Protocol";
-const char* WS_STR_ACCEPT     = "Sec-WebSocket-Accept";
-const char* WS_STR_UUID       = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+using namespace std::literals::string_view_literals;
+
+static const std::string_view WS_STR_CONNECTION = "Connection"sv;
+static const std::string_view WS_STR_UPGRADE    = "Upgrade"sv;
+static const std::string_view WS_STR_ORIGIN     = "Origin"sv;
+static const std::string_view WS_STR_VERSION    = "Sec-WebSocket-Version"sv;
+static const std::string_view WS_STR_KEY        = "Sec-WebSocket-Key"sv;
+static const std::string_view WS_STR_PROTOCOL   = "Sec-WebSocket-Protocol"sv;
+static const std::string_view WS_STR_ACCEPT     = "Sec-WebSocket-Accept"sv;
+static const std::string_view WS_STR_UUID       = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"sv;
 
 bool AsyncWebSocket::canHandle(AsyncWebServerRequest* request)
 {
   if (!_enabled) return false;
 
-  if (request->method() != HTTP_GET || !request->url().equals(_url) || !request->isExpectedRequestedConnType(RCT_WS)) return false;
+  if (request->method() != HTTP_GET || request->url() != _url || !request->isExpectedRequestedConnType(RCT_WS)) return false;
 
   return true;
 }
@@ -1226,7 +1132,8 @@ void AsyncWebSocket::handleRequest(AsyncWebServerRequest* request)
     return;
   }
   AsyncWebHeader* version = request->getHeader(WS_STR_VERSION);
-  if (version->value().toInt() != 13) {
+  int32_t versionInt      = 0;
+  if (!OpenShock::Convert::ToInt32(version->value(), versionInt) || versionInt != 13) {
     AsyncWebServerResponse* response = request->beginResponse(400);
     response->addHeader(WS_STR_VERSION, "13");
     request->send(response);
@@ -1289,42 +1196,29 @@ AsyncWebSocket::AsyncWebSocketClientLinkedList AsyncWebSocket::getClients() cons
  * Authentication code from https://github.com/Links2004/arduinoWebSockets/blob/master/src/WebSockets.cpp#L480
  */
 
-AsyncWebSocketResponse::AsyncWebSocketResponse(const String& key, AsyncWebSocket* server)
+AsyncWebSocketResponse::AsyncWebSocketResponse(std::string_view key, AsyncWebSocket* server)
 {
   _server            = server;
   _code              = 101;
   _sendContentLength = false;
 
-  uint8_t* hash = (uint8_t*)malloc(20);
-  if (hash == NULL) {
-    _state = RESPONSE_FAILED;
-    return;
-  }
-  char* buffer = (char*)malloc(33);
-  if (buffer == NULL) {
-    free(hash);
+  std::array<uint8_t, 20> hash;
+  OpenShock::SHA1 sha1;
+  if (!sha1.begin() || !sha1.update(key) || !sha1.update(WS_STR_UUID) || !sha1.finish(hash)) {
     _state = RESPONSE_FAILED;
     return;
   }
 
-  // Sha1 hash
-  (String&)key += WS_STR_UUID;
-  mbedtls_sha1_context ctx;
-  mbedtls_sha1_init(&ctx);
-  mbedtls_sha1_starts_ret(&ctx);
-  mbedtls_sha1_update_ret(&ctx, (const unsigned char*)key.c_str(), key.length());
-  mbedtls_sha1_finish_ret(&ctx, hash);
-  mbedtls_sha1_free(&ctx);
+  std::array<char, 33> buffer;
+  if (OpenShock::Base64Utils::Encode(hash.data(), hash.size(), buffer.data(), buffer.size() - 1) == 0) {
+    _state = RESPONSE_FAILED;
+    return;
+  }
+  buffer[buffer.size() - 1] = 0;  // TODO: Check how long output string actually becomes
 
-  base64_encodestate _state;
-  base64_init_encodestate(&_state);
-  int len = base64_encode_block((const char*)hash, 20, buffer, &_state);
-  len     = base64_encode_blockend((buffer + len), &_state);
   addHeader(WS_STR_CONNECTION, WS_STR_UPGRADE);
   addHeader(WS_STR_UPGRADE, "websocket");
-  addHeader(WS_STR_ACCEPT, buffer);
-  free(buffer);
-  free(hash);
+  addHeader(WS_STR_ACCEPT, buffer.data());
 }
 
 void AsyncWebSocketResponse::_respond(AsyncWebServerRequest* request)
@@ -1333,7 +1227,7 @@ void AsyncWebSocketResponse::_respond(AsyncWebServerRequest* request)
     request->client()->close(true);
     return;
   }
-  String out = _assembleHead(request->version());
+  std::string out = _assembleHead(request->version());
   request->client()->write(out.c_str(), _headLength);
   _state = RESPONSE_WAIT_ACK;
 }

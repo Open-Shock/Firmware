@@ -227,19 +227,13 @@ public:
 
   size_t printf(const char* format, ...) __attribute__((format(printf, 2, 3)));
   void text(const char* message, size_t len);
-  void text(const char* message);
   void text(uint8_t* message, size_t len);
-  void text(char* message);
-  void text(const String& message);
-  void text(const __FlashStringHelper* data);
+  void text(std::string_view message);
   void text(AsyncWebSocketMessageBuffer* buffer);
 
   void binary(const char* message, size_t len);
-  void binary(const char* message);
   void binary(uint8_t* message, size_t len);
-  void binary(char* message);
-  void binary(const String& message);
-  void binary(const __FlashStringHelper* data, size_t len);
+  void binary(std::string_view message);
   void binary(AsyncWebSocketMessageBuffer* buffer);
 
   bool canSend() { return _messageQueue.length() < WS_MAX_QUEUED_MESSAGES; }
@@ -261,7 +255,7 @@ public:
   typedef LinkedList<AsyncWebSocketClient*> AsyncWebSocketClientLinkedList;
 
 private:
-  String _url;
+  std::string _url;
   AsyncWebSocketClientLinkedList _clients;
   uint32_t _cNextId;
   AwsEventHandler _eventHandler;
@@ -270,7 +264,7 @@ private:
   SemaphoreHandle_t _buffersLock;
 
 public:
-  AsyncWebSocket(const String& url);
+  AsyncWebSocket(std::string_view url);
   ~AsyncWebSocket();
   const char* url() const { return _url.c_str(); }
   void enable(bool e) { _enabled = e; }
@@ -290,33 +284,21 @@ public:
   void pingAll(uint8_t* data = NULL, size_t len = 0);  //  done
 
   void text(uint32_t id, const char* message, size_t len);
-  void text(uint32_t id, const char* message);
   void text(uint32_t id, uint8_t* message, size_t len);
-  void text(uint32_t id, char* message);
-  void text(uint32_t id, const String& message);
-  void text(uint32_t id, const __FlashStringHelper* message);
+  void text(uint32_t id, std::string_view message);
 
   void textAll(const char* message, size_t len);
-  void textAll(const char* message);
   void textAll(uint8_t* message, size_t len);
-  void textAll(char* message);
-  void textAll(const String& message);
-  void textAll(const __FlashStringHelper* message);  //  need to convert
+  void textAll(std::string_view message);
   void textAll(AsyncWebSocketMessageBuffer* buffer);
 
   void binary(uint32_t id, const char* message, size_t len);
-  void binary(uint32_t id, const char* message);
   void binary(uint32_t id, uint8_t* message, size_t len);
-  void binary(uint32_t id, char* message);
-  void binary(uint32_t id, const String& message);
-  void binary(uint32_t id, const __FlashStringHelper* message, size_t len);
+  void binary(uint32_t id, std::string_view message);
 
   void binaryAll(const char* message, size_t len);
-  void binaryAll(const char* message);
   void binaryAll(uint8_t* message, size_t len);
-  void binaryAll(char* message);
-  void binaryAll(const String& message);
-  void binaryAll(const __FlashStringHelper* message, size_t len);
+  void binaryAll(std::string_view message);
   void binaryAll(AsyncWebSocketMessageBuffer* buffer);
 
   void message(uint32_t id, AsyncWebSocketMessage* message);
@@ -352,7 +334,7 @@ private:
   AsyncWebSocket* _server;
 
 public:
-  AsyncWebSocketResponse(const String& key, AsyncWebSocket* server);
+  AsyncWebSocketResponse(std::string_view key, AsyncWebSocket* server);
   void _respond(AsyncWebServerRequest* request);
   size_t _ack(AsyncWebServerRequest* request, size_t len, uint32_t time);
   bool _sourceValid() const { return true; }

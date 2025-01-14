@@ -165,12 +165,12 @@ void AsyncWebServerResponse::setContentLength(size_t len)
   if (_state == RESPONSE_SETUP) _contentLength = len;
 }
 
-void AsyncWebServerResponse::setContentType(const String& type)
+void AsyncWebServerResponse::setContentType(std::string_view type)
 {
   if (_state == RESPONSE_SETUP) _contentType = type;
 }
 
-void AsyncWebServerResponse::addHeader(const String& name, const String& value)
+void AsyncWebServerResponse::addHeader(std::string_view name, std::string_view value)
 {
   _headers.add(new AsyncWebHeader(name, value));
 }
