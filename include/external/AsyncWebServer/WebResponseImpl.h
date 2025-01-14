@@ -31,10 +31,10 @@
 
 class AsyncBasicResponse : public AsyncWebServerResponse {
 private:
-  String _content;
+  std::string _content;
 
 public:
-  AsyncBasicResponse(int code, const String& contentType = String(), const String& content = String());
+  AsyncBasicResponse(int code, std::string_view contentType = {}, std::string_view content = {});
   void _respond(AsyncWebServerRequest* request);
   size_t _ack(AsyncWebServerRequest* request, size_t len, uint32_t time);
   bool _sourceValid() const { return true; }
@@ -42,7 +42,7 @@ public:
 
 class AsyncAbstractResponse : public AsyncWebServerResponse {
 private:
-  String _head;
+  std::string _head;
   // Data is inserted into cache at begin().
   // This is inefficient with vector, but if we use some other container,
   // we won't be able to access it as contiguous array of bytes when reading from it,
@@ -69,12 +69,12 @@ class AsyncFileResponse : public AsyncAbstractResponse {
 
 private:
   File _content;
-  String _path;
-  void _setContentType(const String& path);
+  std::string _path;
+  void _setContentType(std::string_view path);
 
 public:
-  AsyncFileResponse(FS& fs, const String& path, const String& contentType = String(), bool download = false);
-  AsyncFileResponse(File content, const String& path, const String& contentType = String(), bool download = false);
+  AsyncFileResponse(FS& fs, std::string_view path, std::string_view contentType = {}, bool download = false);
+  AsyncFileResponse(File content, std::string_view path, std::string_view contentType = {}, bool download = false);
   ~AsyncFileResponse();
   bool _sourceValid() const { return !!(_content); }
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
@@ -85,7 +85,7 @@ private:
   Stream* _content;
 
 public:
-  AsyncStreamResponse(Stream& stream, const String& contentType, size_t len);
+  AsyncStreamResponse(Stream& stream, std::string_view contentType, size_t len);
   bool _sourceValid() const { return !!(_content); }
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
 };
@@ -96,7 +96,7 @@ private:
   size_t _filledLength;
 
 public:
-  AsyncCallbackResponse(const String& contentType, size_t len, AwsResponseFiller callback);
+  AsyncCallbackResponse(std::string_view contentType, size_t len, AwsResponseFiller callback);
   bool _sourceValid() const { return !!(_content); }
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
 };
@@ -107,7 +107,7 @@ private:
   size_t _filledLength;
 
 public:
-  AsyncChunkedResponse(const String& contentType, AwsResponseFiller callback);
+  AsyncChunkedResponse(std::string_view contentType, AwsResponseFiller callback);
   bool _sourceValid() const { return !!(_content); }
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
 };
@@ -118,7 +118,7 @@ private:
   size_t _readLength;
 
 public:
-  AsyncProgmemResponse(int code, const String& contentType, const uint8_t* content, size_t len);
+  AsyncProgmemResponse(int code, std::string_view contentType, const uint8_t* content, size_t len);
   bool _sourceValid() const { return true; }
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
 };
@@ -132,7 +132,7 @@ private:
   cbuf* _content;
 
 public:
-  AsyncResponseStream(const String& contentType, size_t bufferSize);
+  AsyncResponseStream(std::string_view contentType, size_t bufferSize);
   ~AsyncResponseStream();
   bool _sourceValid() const { return (_state < RESPONSE_END); }
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;

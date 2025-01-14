@@ -41,8 +41,6 @@
 #define ASYNCWEBSERVER_REGEX_ATTRIBUTE __attribute__((warning("ASYNCWEBSERVER_REGEX not defined")))
 #endif
 
-#define DEBUGF(...)  // Serial.printf(__VA_ARGS__)
-
 class AsyncWebServer;
 class AsyncWebServerRequest;
 class AsyncWebServerResponse;
@@ -284,7 +282,7 @@ public:
   const std::string& header(const char* name) const;  // get request header value by name
   const std::string& header(size_t i) const;          // get request header value by number
   const std::string& headerName(size_t i) const;      // get request header name by number
-  String urlDecode(std::string_view text) const;
+  std::string urlDecode(std::string_view text) const;
 };
 
 /*

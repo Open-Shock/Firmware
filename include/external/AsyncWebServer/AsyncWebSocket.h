@@ -225,7 +225,6 @@ public:
   void message(AsyncWebSocketMessage* message) { _queueMessage(message); }
   bool queueIsFull();
 
-  size_t printf(const char* format, ...) __attribute__((format(printf, 2, 3)));
   void text(const char* message, size_t len);
   void text(uint8_t* message, size_t len);
   void text(std::string_view message);
@@ -304,10 +303,6 @@ public:
   void message(uint32_t id, AsyncWebSocketMessage* message);
   void messageAll(AsyncWebSocketMultiMessage* message);
 
-  size_t printf(uint32_t id, const char* format, ...) __attribute__((format(printf, 3, 4)));
-  size_t printfAll(const char* format, ...) __attribute__((format(printf, 2, 3)));
-  size_t printfAll_P(PGM_P formatP, ...) __attribute__((format(printf, 2, 3)));
-
   // event listener
   void onEvent(AwsEventHandler handler) { _eventHandler = handler; }
 
@@ -330,7 +325,7 @@ public:
 // WebServer response to authenticate the socket and detach the tcp client from the web server request
 class AsyncWebSocketResponse : public AsyncWebServerResponse {
 private:
-  String _content;
+  std::string _content;
   AsyncWebSocket* _server;
 
 public:

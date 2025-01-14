@@ -21,6 +21,10 @@
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebHandlerImpl.h"
 
+#include "Logging.h"
+
+const char* const TAG = "WebHandlers";
+
 AsyncStaticWebHandler::AsyncStaticWebHandler(const char* uri, FS& fs, const char* path, const char* cache_control)
   : _fs(fs)
   , _uri(uri)
@@ -69,11 +73,11 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setSharedEtag(std::string_view eta
 
 bool AsyncStaticWebHandler::canHandle(AsyncWebServerRequest* request)
 {
-  if (request->method() != HTTP_GET || !request->url().startsWith(_uri) || !request->isExpectedRequestedConnType(RCT_DEFAULT, RCT_HTTP)) {
+  if (request->method() != HTTP_GET || !OpenShock::StringStartsWith(request->url(), _uri) || !request->isExpectedRequestedConnType(RCT_DEFAULT, RCT_HTTP)) {
     return false;
   }
   if (_getFile(request)) {
-    DEBUGF("[AsyncStaticWebHandler::canHandle] TRUE\n");
+    OS_LOGD(TAG, "TRUE");
     return true;
   }
 
@@ -121,7 +125,7 @@ bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest* request, std::str
   // Extract the file name from the path and keep it in _tempObject
   size_t pathLen  = path.length();
   char* _tempPath = (char*)malloc(pathLen + 1);
-  snprintf(_tempPath, pathLen + 1, "%s", path.c_str());
+  snprintf(_tempPath, pathLen + 1, "%s", path.data());
   request->_tempObject = (void*)_tempPath;
 
   return true;

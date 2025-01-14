@@ -21,6 +21,8 @@
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebResponseImpl.h"
 
+#include "util/HexUtils.h"
+
 static const std::string SharedEmptyString = std::string();
 
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
@@ -167,7 +169,8 @@ void AsyncWebServerRequest::_onData(void* buf, size_t len)
           _parsedLength += len;
       } else {
         if (_parsedLength == 0) {
-          if (_contentType.startsWith("application/x-www-form-urlencoded")) {
+          using namespace std::string_view_literals;
+          if (OpenShock::StringStartsWith(_contentType, "application/x-www-form-urlencoded"sv)) {
             _isPlainPost = true;
           } else if (_contentType == "text/plain" && __is_param_char(((char*)buf)[0])) {
             size_t i = 0;
@@ -267,7 +270,7 @@ void AsyncWebServerRequest::_addParam(AsyncWebParameter* p)
 
 void AsyncWebServerRequest::_addPathParam(const char* p)
 {
-  _pathParams.add(new String(p));
+  _pathParams.add(new std::string(p));
 }
 
 void AsyncWebServerRequest::_addGetParams(std::string_view params)
@@ -881,26 +884,23 @@ const std::string& AsyncWebServerRequest::headerName(size_t i) const
   return h ? h->name() : SharedEmptyString;
 }
 
-String AsyncWebServerRequest::urlDecode(std::string_view text) const
+std::string AsyncWebServerRequest::urlDecode(std::string_view text) const
 {
-  char temp[]      = "0x00";
-  unsigned int len = text.length();
-  unsigned int i   = 0;
-  String decoded   = String();
+  std::size_t len     = text.length();
+  std::size_t i       = 0;
+  std::string decoded = std::string();
   decoded.reserve(len);  // Allocate the string internal buffer - never longer from source text
   while (i < len) {
-    char decodedChar;
-    char encodedChar = text.charAt(i++);
-    if ((encodedChar == '%') && (i + 1 < len)) {
-      temp[2]     = text.charAt(i++);
-      temp[3]     = text.charAt(i++);
-      decodedChar = strtol(temp, NULL, 16);
+    uint8_t decodedChar;
+    char encodedChar = text[i++];
+    if (encodedChar == '%' && OpenShock::HexUtils::TryParseHexPair(text[i], text[i + 1], decodedChar)) {
+      i += 2;
     } else if (encodedChar == '+') {
       decodedChar = ' ';
     } else {
       decodedChar = encodedChar;  // normal ascii char
     }
-    decoded.concat(decodedChar);
+    decoded.push_back(decodedChar);
   }
   return decoded;
 }

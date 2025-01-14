@@ -28,7 +28,7 @@
 namespace std {
   template<>
   struct hash<String> {
-    size_t operator()(const String& _Keyval) const noexcept { return (std::_Hash_bytes(_Keyval.c_str(), _Keyval.length(), 0)); }
+    size_t operator()(std::string_view _Keyval) const noexcept { return (std::_Hash_bytes(_Keyval.c_str(), _Keyval.length(), 0)); }
   };
 }  // namespace std
 
@@ -240,7 +240,7 @@ size_t AsyncWebServerResponse::_ack(AsyncWebServerRequest* request, size_t len, 
 /*
  * String/Code Response
  * */
-AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, const String& content)
+AsyncBasicResponse::AsyncBasicResponse(int code, std::string_view contentType, std::string_view content)
 {
   _code        = code;
   _content     = content;
@@ -455,7 +455,7 @@ AsyncFileResponse::~AsyncFileResponse()
   if (_content) _content.close();
 }
 
-void AsyncFileResponse::_setContentType(const String& path)
+void AsyncFileResponse::_setContentType(std::string_view path)
 {
   const char* const BINARY_MIME = "application/octet-stream";
 
@@ -499,7 +499,7 @@ void AsyncFileResponse::_setContentType(const String& path)
   _contentType = it->second;
 }
 
-AsyncFileResponse::AsyncFileResponse(FS& fs, const String& path, const String& contentType, bool download)
+AsyncFileResponse::AsyncFileResponse(FS& fs, std::string_view path, std::string_view contentType, bool download)
   : AsyncAbstractResponse()
 {
   _code = 200;
@@ -534,7 +534,7 @@ AsyncFileResponse::AsyncFileResponse(FS& fs, const String& path, const String& c
   addHeader("Content-Disposition", buf);
 }
 
-AsyncFileResponse::AsyncFileResponse(File content, const String& path, const String& contentType, bool download)
+AsyncFileResponse::AsyncFileResponse(File content, std::string_view path, std::string_view contentType, bool download)
   : AsyncAbstractResponse()
 {
   _code = 200;
@@ -575,7 +575,7 @@ size_t AsyncFileResponse::_fillBuffer(uint8_t* data, size_t len)
  * Stream Response
  * */
 
-AsyncStreamResponse::AsyncStreamResponse(Stream& stream, const String& contentType, size_t len)
+AsyncStreamResponse::AsyncStreamResponse(Stream& stream, std::string_view contentType, size_t len)
   : AsyncAbstractResponse()
 {
   _code          = 200;
@@ -597,7 +597,7 @@ size_t AsyncStreamResponse::_fillBuffer(uint8_t* data, size_t len)
  * Callback Response
  * */
 
-AsyncCallbackResponse::AsyncCallbackResponse(const String& contentType, size_t len, AwsResponseFiller callback)
+AsyncCallbackResponse::AsyncCallbackResponse(std::string_view contentType, size_t len, AwsResponseFiller callback)
   : AsyncAbstractResponse()
 {
   _code          = 200;
@@ -621,7 +621,7 @@ size_t AsyncCallbackResponse::_fillBuffer(uint8_t* data, size_t len)
  * Chunked Response
  * */
 
-AsyncChunkedResponse::AsyncChunkedResponse(const String& contentType, AwsResponseFiller callback)
+AsyncChunkedResponse::AsyncChunkedResponse(std::string_view contentType, AwsResponseFiller callback)
   : AsyncAbstractResponse()
 {
   _code              = 200;
@@ -646,7 +646,7 @@ size_t AsyncChunkedResponse::_fillBuffer(uint8_t* data, size_t len)
  * Progmem Response
  * */
 
-AsyncProgmemResponse::AsyncProgmemResponse(int code, const String& contentType, const uint8_t* content, size_t len)
+AsyncProgmemResponse::AsyncProgmemResponse(int code, std::string_view contentType, const uint8_t* content, size_t len)
   : AsyncAbstractResponse()
 {
   _code          = code;
@@ -673,7 +673,7 @@ size_t AsyncProgmemResponse::_fillBuffer(uint8_t* data, size_t len)
  * Response Stream (You can print/write/printf to it, up to the contentLen bytes)
  * */
 
-AsyncResponseStream::AsyncResponseStream(const String& contentType, size_t bufferSize)
+AsyncResponseStream::AsyncResponseStream(std::string_view contentType, size_t bufferSize)
 {
   _code          = 200;
   _contentLength = 0;

@@ -40,9 +40,9 @@ private:
 
 protected:
   FS _fs;
-  String _uri;
-  String _path;
-  String _default_file;
+  std::string _uri;
+  std::string _path;
+  std::string _default_file;
   std::string _cache_control;
   std::string _shared_eTag;
   bool _isDir;
@@ -107,16 +107,18 @@ public:
       }
     } else
 #endif
-      if (_uri.length() && _uri.startsWith("/*."))
-    {
-      String uriTemplate = String(_uri);
-      uriTemplate        = uriTemplate.substring(uriTemplate.lastIndexOf("."));
-      if (!request->url().endsWith(uriTemplate)) return false;
-    } else if (_uri.length() && _uri.endsWith("*")) {
-      String uriTemplate = String(_uri);
-      uriTemplate        = uriTemplate.substring(0, uriTemplate.length() - 1);
-      if (!request->url().startsWith(uriTemplate)) return false;
-    } else if (_uri.length() && (_uri != request->url() && !request->url().startsWith(_uri + "/")))
+
+      using namespace std::string_view_literals;
+
+    if (OpenShock::StringStartsWith(_uri, "/*."sv)) {
+      std::string uriTemplate = _uri;
+      uriTemplate             = uriTemplate.substring(uriTemplate.lastIndexOf("."));
+      if (!OpenShock::StringEndsWith(request->url(), uriTemplate)) return false;
+    } else if (OpenShock::StringEndsWith(_uri, '*')) {
+      std::string uriTemplate = _uri;
+      uriTemplate             = uriTemplate.substring(0, uriTemplate.length() - 1);
+      if (!OpenShock::StringStartsWith(request->url(), uriTemplate)) return false;
+    } else if (_uri.length() && (_uri != request->url() && !OpenShock::StringStartsWith(request->url(), _uri + "/")))
       return false;
 
     return true;

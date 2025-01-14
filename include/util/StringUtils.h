@@ -41,6 +41,13 @@ namespace OpenShock {
   constexpr bool StringStartsWith(std::string_view view, std::string_view prefix) {
     return view.size() >= prefix.size() && view.substr(0, prefix.size()) == prefix;
   }
+  constexpr bool StringEndsWith(std::string_view view, char suffix)
+  {
+    return view.size() >= 1 && view.back() == suffix;
+  }
+  constexpr bool StringEndsWith(std::string_view view, std::string_view suffix) {
+    return view.size() >= suffix.size() && view.substr(view.size() - suffix.size(), view.size()) == suffix;
+  }
   template<std::size_t N>
   constexpr bool TryStringSplit(std::string_view view, char delimiter, std::string_view (&out)[N]) {
     std::size_t pos = 0;

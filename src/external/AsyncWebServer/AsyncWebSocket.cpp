@@ -18,14 +18,19 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
+
+#include <freertos/FreeRTOS.h>
+
 #include "external/AsyncWebServer/AsyncWebSocket.h"
+
+const char* const TAG = "AsyncWebSocket";
+
 #include "Arduino.h"
 
 #include "Convert.h"
 #include "Hashing.h"
+#include "Logging.h"
 #include "util/Base64Utils.h"
-
-#define MAX_PRINTF_LEN 64
 
 size_t webSocketSendFrameWindow(AsyncClient* client)
 {
@@ -697,7 +702,7 @@ _exceptionHandleFailPartialHeader:
     memcpy(_partialHeader, headerBuf, initialPlen * sizeof(uint8_t));
     _partialHeaderLen = initialPlen;
   } else {
-    DEBUGF("[AsyncWebSocketClient::_onData] initialPlen (= %d) > WS_MAX_HEADER_LEN (= %d)\n", initialPlen, WS_MAX_HEADER_LEN);
+    OS_LOGD(TAG, "initialPlen (= %d) > WS_MAX_HEADER_LEN (= %d)", initialPlen, WS_MAX_HEADER_LEN);
   }
   return;
 }
@@ -764,37 +769,6 @@ _headerParsingSuccessful:
     data += datalen;
     plen -= datalen;
   }
-}
-
-size_t AsyncWebSocketClient::printf(const char* format, ...)
-{
-  va_list arg;
-  va_start(arg, format);
-  char* temp = new char[MAX_PRINTF_LEN];
-  if (!temp) {
-    va_end(arg);
-    return 0;
-  }
-  char* buffer = temp;
-  size_t len   = vsnprintf(temp, MAX_PRINTF_LEN, format, arg);
-  va_end(arg);
-
-  if (len > (MAX_PRINTF_LEN - 1)) {
-    buffer = new char[len + 1];
-    if (!buffer) {
-      delete[] temp;
-      return 0;
-    }
-    va_start(arg, format);
-    vsnprintf(buffer, len + 1, format, arg);
-    va_end(arg);
-  }
-  text(buffer, len);
-  if (buffer != temp) {
-    delete[] buffer;
-  }
-  delete[] temp;
-  return len;
 }
 
 void AsyncWebSocketClient::text(const char* message, size_t len)
@@ -1007,69 +981,6 @@ void AsyncWebSocket::messageAll(AsyncWebSocketMultiMessage* message)
     if (c->status() == WS_CONNECTED) c->message(message);
   }
   _cleanBuffers();
-}
-
-size_t AsyncWebSocket::printf(uint32_t id, const char* format, ...)
-{
-  AsyncWebSocketClient* c = client(id);
-  if (c) {
-    va_list arg;
-    va_start(arg, format);
-    size_t len = c->printf(format, arg);
-    va_end(arg);
-    return len;
-  }
-  return 0;
-}
-
-size_t AsyncWebSocket::printfAll(const char* format, ...)
-{
-  va_list arg;
-  char* temp = new char[MAX_PRINTF_LEN];
-  if (!temp) {
-    return 0;
-  }
-  va_start(arg, format);
-  size_t len = vsnprintf(temp, MAX_PRINTF_LEN, format, arg);
-  va_end(arg);
-  delete[] temp;
-
-  AsyncWebSocketMessageBuffer* buffer = makeBuffer(len);
-  if (!buffer) {
-    return 0;
-  }
-
-  va_start(arg, format);
-  vsnprintf((char*)buffer->get(), len + 1, format, arg);
-  va_end(arg);
-
-  textAll(buffer);
-  return len;
-}
-
-size_t AsyncWebSocket::printfAll_P(PGM_P formatP, ...)
-{
-  va_list arg;
-  char* temp = new char[MAX_PRINTF_LEN];
-  if (!temp) {
-    return 0;
-  }
-  va_start(arg, formatP);
-  size_t len = vsnprintf_P(temp, MAX_PRINTF_LEN, formatP, arg);
-  va_end(arg);
-  delete[] temp;
-
-  AsyncWebSocketMessageBuffer* buffer = makeBuffer(len + 1);
-  if (!buffer) {
-    return 0;
-  }
-
-  va_start(arg, formatP);
-  vsnprintf_P((char*)buffer->get(), len + 1, formatP, arg);
-  va_end(arg);
-
-  textAll(buffer);
-  return len;
 }
 
 void AsyncWebSocket::text(uint32_t id, uint8_t* message, size_t len)
