@@ -93,7 +93,7 @@ public:
   uint16_t getMss();
 
   uint32_t getRxTimeout();
-  void setRxTimeout(uint32_t timeout);  // no RX data timeout for the connection in seconds
+  void setRxTimeout(uint32_t timeout);  // no RX data timeout for the connection in milliseconds
 
   uint32_t getAckTimeout();
   void setAckTimeout(uint32_t timeout);  // no ACK timeout for the last sent packet in milliseconds
@@ -158,10 +158,10 @@ protected:
   void* _poll_cb_arg;
 
   bool _pcb_busy;
-  uint32_t _pcb_sent_at;
+  int64_t _pcb_sent_at;
   bool _ack_pcb;
   uint32_t _rx_ack_len;
-  uint32_t _rx_last_packet;
+  int64_t _rx_last_packet;
   uint32_t _rx_since_timeout;
   uint32_t _ack_timeout;
   uint16_t _connect_port;

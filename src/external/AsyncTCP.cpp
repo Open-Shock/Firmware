@@ -614,7 +614,7 @@ AsyncClient::AsyncClient(tcp_pcb* pcb)
   _closed_slot = -1;
   if (_pcb) {
     _allocate_closed_slot();
-    _rx_last_packet = OpenShock::millis();
+    _rx_last_packet = OpenShock::micros();
     tcp_arg(_pcb, this);
     tcp_recv(_pcb, &_tcp_recv);
     tcp_sent(_pcb, &_tcp_sent);
@@ -644,7 +644,7 @@ AsyncClient& AsyncClient::operator=(const AsyncClient& other)
   _pcb         = other._pcb;
   _closed_slot = other._closed_slot;
   if (_pcb) {
-    _rx_last_packet = OpenShock::millis();
+    _rx_last_packet = OpenShock::micros();
     tcp_arg(_pcb, this);
     tcp_recv(_pcb, &_tcp_recv);
     tcp_sent(_pcb, &_tcp_sent);
@@ -827,7 +827,7 @@ bool AsyncClient::send()
   err        = _tcp_output(_pcb, _closed_slot);
   if (err == ERR_OK) {
     _pcb_busy    = true;
-    _pcb_sent_at = OpenShock::millis();
+    _pcb_sent_at = OpenShock::micros();
     return true;
   }
   return false;
@@ -913,7 +913,7 @@ int8_t AsyncClient::_connected(void* pcb, int8_t err)
 {
   _pcb = reinterpret_cast<tcp_pcb*>(pcb);
   if (_pcb) {
-    _rx_last_packet = OpenShock::millis();
+    _rx_last_packet = OpenShock::micros();
     _pcb_busy       = false;
     //        tcp_recv(_pcb, &_tcp_recv);
     //        tcp_sent(_pcb, &_tcp_sent);
@@ -979,11 +979,13 @@ int8_t AsyncClient::_fin(tcp_pcb* pcb, int8_t err)
 
 int8_t AsyncClient::_sent(tcp_pcb* pcb, uint16_t len)
 {
-  _rx_last_packet = OpenShock::millis();
+  int64_t now = OpenShock::micros();
+
+  _rx_last_packet = now;
   // OS_LOGI(TAG, "%u", len);
   _pcb_busy = false;
   if (_sent_cb) {
-    _sent_cb(_sent_cb_arg, this, len, (OpenShock::millis() - _pcb_sent_at));
+    _sent_cb(_sent_cb_arg, this, len, (now - _pcb_sent_at) / 1000);
   }
   return ERR_OK;
 }
@@ -991,7 +993,7 @@ int8_t AsyncClient::_sent(tcp_pcb* pcb, uint16_t len)
 int8_t AsyncClient::_recv(tcp_pcb* pcb, pbuf* pb, int8_t err)
 {
   while (pb != NULL) {
-    _rx_last_packet = OpenShock::millis();
+    _rx_last_packet = OpenShock::micros();
     // we should not ack before we assimilate the data
     _ack_pcb = true;
     pbuf* b  = pb;
@@ -1024,13 +1026,13 @@ int8_t AsyncClient::_poll(tcp_pcb* pcb)
     return ERR_OK;
   }
 
-  uint32_t now = OpenShock::millis();
+  int64_t now = OpenShock::micros();
 
   // ACK Timeout
-  if (_pcb_busy && _ack_timeout && (now - _pcb_sent_at) >= _ack_timeout) {
+  if (_pcb_busy && _ack_timeout && (now - _pcb_sent_at) >= (_ack_timeout * 1000)) {
     _pcb_busy = false;
     OS_LOGW(TAG, "ack timeout %d", pcb->state);
-    if (_timeout_cb) _timeout_cb(_timeout_cb_arg, this, (now - _pcb_sent_at));
+    if (_timeout_cb) _timeout_cb(_timeout_cb_arg, this, (now - _pcb_sent_at) / 1000);
     return ERR_OK;
   }
   // RX Timeout
