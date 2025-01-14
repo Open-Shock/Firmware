@@ -21,8 +21,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "stddef.h"
-#include "WString.h"
+#include <cstddef>
+#include <functional>
 
 template<typename T>
 class LinkedListNode {
@@ -194,23 +194,5 @@ public:
       delete it;
     }
     _root = nullptr;
-  }
-};
-
-class StringArray : public LinkedList<String> {
-public:
-  StringArray()
-    : LinkedList(nullptr)
-  {
-  }
-
-  bool containsIgnoreCase(const String& str)
-  {
-    for (const auto& s : *this) {
-      if (str.equalsIgnoreCase(s)) {
-        return true;
-      }
-    }
-    return false;
   }
 };
