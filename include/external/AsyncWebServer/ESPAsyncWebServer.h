@@ -351,12 +351,11 @@ protected:
   size_t _contentLength;
   bool _sendContentLength;
   bool _chunked;
-  size_t _headLength;
   size_t _sentLength;
   size_t _ackedLength;
   size_t _writtenLength;
   WebResponseState _state;
-  const char* _responseCodeToString(int code);
+  std::string_view _responseCodeToString(int code);
 
 public:
   AsyncWebServerResponse();

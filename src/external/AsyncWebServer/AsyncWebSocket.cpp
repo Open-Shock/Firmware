@@ -1105,7 +1105,7 @@ void AsyncWebSocket::binaryAll(std::string_view message)
   binaryAll(message.data(), message.length());
 }
 
-using namespace std::literals::string_view_literals;
+using namespace std::string_view_literals;
 
 static const std::string_view WS_STR_CONNECTION = "Connection"sv;
 static const std::string_view WS_STR_UPGRADE    = "Upgrade"sv;
@@ -1228,7 +1228,7 @@ void AsyncWebSocketResponse::_respond(AsyncWebServerRequest* request)
     return;
   }
   std::string out = _assembleHead(request->version());
-  request->client()->write(out.c_str(), _headLength);
+  request->client()->write(out.c_str(), out.size());
   _state = RESPONSE_WAIT_ACK;
 }
 

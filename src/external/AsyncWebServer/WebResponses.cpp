@@ -44,91 +44,93 @@ void* memchr(void* ptr, int ch, size_t count)
 /*
  * Abstract Response
  * */
-const char* AsyncWebServerResponse::_responseCodeToString(int code)
+std::string_view AsyncWebServerResponse::_responseCodeToString(int code)
 {
+  using namespace std::string_view_literals;
+
   switch (code) {
     case 100:
-      return "Continue";
+      return "Continue"sv;
     case 101:
-      return "Switching Protocols";
+      return "Switching Protocols"sv;
     case 200:
-      return "OK";
+      return "OK"sv;
     case 201:
-      return "Created";
+      return "Created"sv;
     case 202:
-      return "Accepted";
+      return "Accepted"sv;
     case 203:
-      return "Non-Authoritative Information";
+      return "Non-Authoritative Information"sv;
     case 204:
-      return "No Content";
+      return "No Content"sv;
     case 205:
-      return "Reset Content";
+      return "Reset Content"sv;
     case 206:
-      return "Partial Content";
+      return "Partial Content"sv;
     case 300:
-      return "Multiple Choices";
+      return "Multiple Choices"sv;
     case 301:
-      return "Moved Permanently";
+      return "Moved Permanently"sv;
     case 302:
-      return "Found";
+      return "Found"sv;
     case 303:
-      return "See Other";
+      return "See Other"sv;
     case 304:
-      return "Not Modified";
+      return "Not Modified"sv;
     case 305:
-      return "Use Proxy";
+      return "Use Proxy"sv;
     case 307:
-      return "Temporary Redirect";
+      return "Temporary Redirect"sv;
     case 400:
-      return "Bad Request";
+      return "Bad Request"sv;
     case 401:
-      return "Unauthorized";
+      return "Unauthorized"sv;
     case 402:
-      return "Payment Required";
+      return "Payment Required"sv;
     case 403:
-      return "Forbidden";
+      return "Forbidden"sv;
     case 404:
-      return "Not Found";
+      return "Not Found"sv;
     case 405:
-      return "Method Not Allowed";
+      return "Method Not Allowed"sv;
     case 406:
-      return "Not Acceptable";
+      return "Not Acceptable"sv;
     case 407:
-      return "Proxy Authentication Required";
+      return "Proxy Authentication Required"sv;
     case 408:
-      return "Request Time-out";
+      return "Request Time-out"sv;
     case 409:
-      return "Conflict";
+      return "Conflict"sv;
     case 410:
-      return "Gone";
+      return "Gone"sv;
     case 411:
-      return "Length Required";
+      return "Length Required"sv;
     case 412:
-      return "Precondition Failed";
+      return "Precondition Failed"sv;
     case 413:
-      return "Request Entity Too Large";
+      return "Request Entity Too Large"sv;
     case 414:
-      return "Request-URI Too Large";
+      return "Request-URI Too Large"sv;
     case 415:
-      return "Unsupported Media Type";
+      return "Unsupported Media Type"sv;
     case 416:
-      return "Requested range not satisfiable";
+      return "Requested range not satisfiable"sv;
     case 417:
-      return "Expectation Failed";
+      return "Expectation Failed"sv;
     case 500:
-      return "Internal Server Error";
+      return "Internal Server Error"sv;
     case 501:
-      return "Not Implemented";
+      return "Not Implemented"sv;
     case 502:
-      return "Bad Gateway";
+      return "Bad Gateway"sv;
     case 503:
-      return "Service Unavailable";
+      return "Service Unavailable"sv;
     case 504:
-      return "Gateway Time-out";
+      return "Gateway Time-out"sv;
     case 505:
-      return "HTTP Version not supported";
+      return "HTTP Version not supported"sv;
     default:
-      return "";
+      return {};
   }
 }
 
@@ -139,7 +141,6 @@ AsyncWebServerResponse::AsyncWebServerResponse()
   , _contentLength(0)
   , _sendContentLength(true)
   , _chunked(false)
-  , _headLength(0)
   , _sentLength(0)
   , _ackedLength(0)
   , _writtenLength(0)
@@ -175,7 +176,7 @@ void AsyncWebServerResponse::addHeader(std::string_view name, std::string_view v
   _headers.add(new AsyncWebHeader(name, value));
 }
 
-String AsyncWebServerResponse::_assembleHead(uint8_t version)
+std::string AsyncWebServerResponse::_assembleHead(uint8_t version)
 {
   if (version) {
     addHeader("Accept-Ranges", "none");
@@ -204,7 +205,6 @@ String AsyncWebServerResponse::_assembleHead(uint8_t version)
   _headers.free();
 
   out.concat("\r\n");
-  _headLength = out.length();
   return out;
 }
 
