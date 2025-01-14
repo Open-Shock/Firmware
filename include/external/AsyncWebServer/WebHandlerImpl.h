@@ -1,3 +1,5 @@
+#pragma once
+
 /*
   Asynchronous WebServer library for Espressif MCUs
 
@@ -18,8 +20,6 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef ASYNCWEBSERVERHANDLERIMPL_H_
-#define ASYNCWEBSERVERHANDLERIMPL_H_
 
 #include <string>
 #ifdef ASYNCWEBSERVER_REGEX
@@ -139,5 +139,3 @@ public:
   }
   virtual bool isRequestHandlerTrivial() override final { return _onRequest ? false : true; }
 };
-
-#endif /* ASYNCWEBSERVERHANDLERIMPL_H_ */

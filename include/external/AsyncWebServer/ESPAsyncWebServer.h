@@ -1,3 +1,5 @@
+#pragma once
+
 /*
   Asynchronous WebServer library for Espressif MCUs
 
@@ -18,8 +20,6 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef _ESPAsyncWebServer_H_
-#define _ESPAsyncWebServer_H_
 
 #include "Arduino.h"
 
@@ -445,5 +445,3 @@ public:
 #include "AsyncWebSocket.h"
 #include "WebHandlerImpl.h"
 #include "WebResponseImpl.h"
-
-#endif /* _AsyncWebServer_H_ */

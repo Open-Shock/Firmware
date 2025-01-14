@@ -1,3 +1,5 @@
+#pragma once
+
 /*
   Asynchronous WebServer library for Espressif MCUs
 
@@ -18,8 +20,6 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef ASYNCWEBSERVERRESPONSEIMPL_H_
-#define ASYNCWEBSERVERRESPONSEIMPL_H_
 
 #ifdef Arduino_h
 // arduino is not compatible with std::vector
@@ -140,5 +140,3 @@ public:
   size_t write(uint8_t data);
   using Print::write;
 };
-
-#endif /* ASYNCWEBSERVERRESPONSEIMPL_H_ */

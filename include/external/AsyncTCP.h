@@ -1,3 +1,5 @@
+#pragma once
+
 /*
   Asynchronous TCP library for Espressif MCUs
 
@@ -18,9 +20,6 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-
-#ifndef ASYNCTCP_H_
-#define ASYNCTCP_H_
 
 #include "sdkconfig.h"
 #include <functional>
@@ -209,5 +208,3 @@ protected:
   int8_t _accept(tcp_pcb* newpcb, int8_t err);
   int8_t _accepted(AsyncClient* client);
 };
-
-#endif /* ASYNCTCP_H_ */
