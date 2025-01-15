@@ -22,9 +22,6 @@
 */
 
 #include <string>
-#ifdef ASYNCWEBSERVER_REGEX
-#include <regex>
-#endif
 
 #include "stddef.h"
 #include <time.h>
@@ -93,35 +90,32 @@ public:
 
     if (!(_method & request->method())) return false;
 
-#ifdef ASYNCWEBSERVER_REGEX
-    if (_isRegex) {
-      std::regex pattern(_uri.c_str());
-      std::smatch matches;
-      std::string s(request->url().c_str());
-      if (std::regex_search(s, matches, pattern)) {
-        for (size_t i = 1; i < matches.size(); ++i) {  // start from 1
-          request->_addPathParam(matches[i].str().c_str());
-        }
-      } else {
-        return false;
-      }
-    } else
-#endif
+    using namespace std::string_view_literals;
 
-      using namespace std::string_view_literals;
+    std::string_view uri        = _uri;
+    std::string_view requestUrl = request->url();
 
-    if (OpenShock::StringStartsWith(_uri, "/*."sv)) {
-      std::string uriTemplate = _uri;
-      uriTemplate             = uriTemplate.substring(uriTemplate.lastIndexOf("."));
-      if (!OpenShock::StringEndsWith(request->url(), uriTemplate)) return false;
-    } else if (OpenShock::StringEndsWith(_uri, '*')) {
-      std::string uriTemplate = _uri;
-      uriTemplate             = uriTemplate.substring(0, uriTemplate.length() - 1);
-      if (!OpenShock::StringStartsWith(request->url(), uriTemplate)) return false;
-    } else if (_uri.length() && (_uri != request->url() && !OpenShock::StringStartsWith(request->url(), _uri + "/")))
-      return false;
+    // Match 1 ??
+    if (OpenShock::StringStartsWith(uri, "/*."sv)) {
+      uri = uri.substr(uri.find_last_of('.'));
 
-    return true;
+      return OpenShock::StringEndsWith(requestUrl, uri);
+    }
+
+    // Match 2 ????
+    if (OpenShock::StringEndsWith(uri, '*')) {
+      uri.remove_suffix(1);
+
+      return OpenShock::StringStartsWith(requestUrl, uri);
+    }
+
+    // Huh ??????
+    if (uri.empty() || uri == requestUrl) {
+      return true;
+    }
+
+    // Way to check if requestUrl ends with uri + "/" without any allocations
+    return requestUrl.length() > uri.length() && requestUrl[uri.length()] == '/' && OpenShock::StringStartsWith(requestUrl, uri);
   }
 
   virtual void handleRequest(AsyncWebServerRequest* request) override final

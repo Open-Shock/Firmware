@@ -35,12 +35,6 @@
 #include <string>
 #include <string_view>
 
-#ifdef ASYNCWEBSERVER_REGEX
-#define ASYNCWEBSERVER_REGEX_ATTRIBUTE
-#else
-#define ASYNCWEBSERVER_REGEX_ATTRIBUTE __attribute__((warning("ASYNCWEBSERVER_REGEX not defined")))
-#endif
-
 class AsyncWebServer;
 class AsyncWebServerRequest;
 class AsyncWebServerResponse;
@@ -277,7 +271,7 @@ public:
   const std::string& argName(size_t i) const;           // get request argument name by number
   bool hasArg(const char* name) const;                  // check if argument exists
 
-  const std::string& ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(size_t i) const;
+  const std::string& pathArg(size_t i) const;
 
   const std::string& header(const char* name) const;  // get request header value by name
   const std::string& header(size_t i) const;          // get request header value by number
