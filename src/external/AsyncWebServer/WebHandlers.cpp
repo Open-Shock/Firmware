@@ -43,8 +43,8 @@ AsyncStaticWebHandler::AsyncStaticWebHandler(const char* uri, FS& fs, const char
 
   // Remove the trailing '/' so we can handle default file
   // Notice that root will be "" not "/"
-  if (_uri[_uri.length() - 1] == '/') _uri = _uri.substring(0, _uri.length() - 1);
-  if (_path[_path.length() - 1] == '/') _path = _path.substring(0, _path.length() - 1);
+  if (_uri[_uri.length() - 1] == '/') _uri = _uri.substr(0, _uri.length() - 1);
+  if (_path[_path.length() - 1] == '/') _path = _path.substr(0, _path.length() - 1);
 }
 
 AsyncStaticWebHandler& AsyncStaticWebHandler::setIsDir(bool isDir)
@@ -55,7 +55,7 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setIsDir(bool isDir)
 
 AsyncStaticWebHandler& AsyncStaticWebHandler::setDefaultFile(const char* filename)
 {
-  _default_file = String(filename);
+  _default_file = filename;
   return *this;
 }
 
@@ -87,7 +87,7 @@ bool AsyncStaticWebHandler::canHandle(AsyncWebServerRequest* request)
 bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
 {
   // Remove the found uri
-  String path = request->url().substring(_uri.length());
+  std::string path = request->url().substr(_uri.length());
 
   // We can skip the file check and look for default if request is to the root of a directory or that request path ends with '/'
   bool canSkipFileCheck = (_isDir && path.length() == 0) || (path.length() && path[path.length() - 1] == '/');
@@ -111,12 +111,13 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
 
 bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest* request, std::string_view path)
 {
-  String gzip = path + ".gz";
+  String pathArdu = OpenShock::StringToArduinoString(path);
+  String gzipArdu = pathArdu + ".gz";
 
-  request->_tempFile = _fs.open(gzip, "rb");
+  request->_tempFile = _fs.open(gzipArdu, "rb");
 
   if (!FILE_IS_REAL(request->_tempFile)) {
-    request->_tempFile = _fs.open(path, "rb");
+    request->_tempFile = _fs.open(pathArdu, "rb");
     if (!FILE_IS_REAL(request->_tempFile)) {
       return false;
     }
@@ -142,7 +143,7 @@ uint8_t AsyncStaticWebHandler::_countBits(const uint8_t value) const
 void AsyncStaticWebHandler::handleRequest(AsyncWebServerRequest* request)
 {
   // Get the filename from request->_tempObject and free it
-  String filename = String((char*)request->_tempObject);
+  std::string filename = (char*)request->_tempObject;
   free(request->_tempObject);
   request->_tempObject = NULL;
 
@@ -155,7 +156,7 @@ void AsyncStaticWebHandler::handleRequest(AsyncWebServerRequest* request)
       response->addHeader("ETag", _shared_eTag);
       request->send(response);
     } else {
-      AsyncWebServerResponse* response = new AsyncFileResponse(request->_tempFile, filename, String(), false);
+      AsyncWebServerResponse* response = new AsyncFileResponse(request->_tempFile, filename, {}, false);
       if (canCache) {
         response->addHeader("Cache-Control", _cache_control);
         response->addHeader("ETag", _shared_eTag);
