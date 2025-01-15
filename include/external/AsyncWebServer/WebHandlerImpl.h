@@ -33,7 +33,6 @@ class AsyncStaticWebHandler : public AsyncWebHandler {
 private:
   bool _getFile(AsyncWebServerRequest* request);
   bool _fileExists(AsyncWebServerRequest* request, std::string_view path);
-  uint8_t _countBits(const uint8_t value) const;
 
 protected:
   FS _fs;
