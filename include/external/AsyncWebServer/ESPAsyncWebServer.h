@@ -26,6 +26,8 @@
 #include "FS.h"
 #include <functional>
 
+#include "HttpRequestMethod.h"
+#include "HttpVersion.h"
 #include "LinkedList.h"
 #include "util/StringUtils.h"
 
@@ -45,23 +47,9 @@ class AsyncStaticWebHandler;
 class AsyncCallbackWebHandler;
 class AsyncResponseStream;
 
-#ifndef WEBSERVER_H
-typedef enum {
-  HTTP_GET     = 0b00000001,
-  HTTP_POST    = 0b00000010,
-  HTTP_DELETE  = 0b00000100,
-  HTTP_PUT     = 0b00001000,
-  HTTP_PATCH   = 0b00010000,
-  HTTP_HEAD    = 0b00100000,
-  HTTP_OPTIONS = 0b01000000,
-  HTTP_ANY     = 0b01111111,
-} WebRequestMethod;
-#endif
-
 // if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN 0xFFFFFFFF
 
-typedef uint8_t WebRequestMethodComposite;
 typedef std::function<void(void)> ArDisconnectHandler;
 
 /*
@@ -156,8 +144,8 @@ private:
   std::string _temp;
   uint8_t _parseState;
 
-  uint8_t _version;
-  WebRequestMethodComposite _method;
+  HttpVersion _version;
+  HttpRequestMethod _method;
   std::string _url;
   std::string _host;
   std::string _contentType;
@@ -202,7 +190,7 @@ private:
   void _parseLine();
   void _parsePlainPostChar(uint8_t data);
   void _parseMultipartPostByte(uint8_t data, bool last);
-  void _addGetParams(std::string_view params);
+  void _parseQueryParams(std::string_view params);
 
   void _handleUploadStart();
   void _handleUploadByte(uint8_t data, bool last);
@@ -216,8 +204,8 @@ public:
   ~AsyncWebServerRequest();
 
   AsyncClient* client() { return _client; }
-  uint8_t version() const { return _version; }
-  WebRequestMethodComposite method() const { return _method; }
+  HttpVersion version() const { return _version; }
+  HttpRequestMethod method() const { return _method; }
   const std::string& url() const { return _url; }
   const std::string& host() const { return _host; }
   const std::string& contentType() const { return _contentType; }
@@ -356,7 +344,7 @@ public:
   virtual void setContentLength(size_t len);
   virtual void setContentType(std::string_view type);
   virtual void addHeader(std::string_view name, std::string_view value);
-  virtual std::string _assembleHead(uint8_t version);
+  virtual std::string _assembleHead(HttpVersion version);
   virtual bool _started() const;
   virtual bool _finished() const;
   virtual bool _failed() const;
@@ -395,9 +383,9 @@ public:
   bool removeHandler(AsyncWebHandler* handler);
 
   AsyncCallbackWebHandler& on(const char* uri, ArRequestHandlerFunction onRequest);
-  AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest);
-  AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);
-  AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload, ArBodyHandlerFunction onBody);
+  AsyncCallbackWebHandler& on(const char* uri, HttpRequestMethod method, ArRequestHandlerFunction onRequest);
+  AsyncCallbackWebHandler& on(const char* uri, HttpRequestMethod method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);
+  AsyncCallbackWebHandler& on(const char* uri, HttpRequestMethod method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload, ArBodyHandlerFunction onBody);
 
   AsyncStaticWebHandler& serveStatic(const char* uri, fs::FS& fs, const char* path, const char* cache_control = NULL);
 

@@ -176,7 +176,7 @@ void AsyncWebServerResponse::addHeader(std::string_view name, std::string_view v
   _headers.add(new AsyncWebHeader(name, value));
 }
 
-std::string AsyncWebServerResponse::_assembleHead(uint8_t version)
+std::string AsyncWebServerResponse::_assembleHead(HttpVersion version)
 {
   if (version) {
     addHeader("Accept-Ranges", "none");
@@ -186,7 +186,7 @@ std::string AsyncWebServerResponse::_assembleHead(uint8_t version)
   int bufSize = 300;
   char buf[bufSize];
 
-  snprintf(buf, bufSize, "HTTP/1.%d %d %s\r\n", version, _code, _responseCodeToString(_code));
+  snprintf(buf, bufSize, "HTTP/%d.%d %d %s\r\n", version.major, version.minor, _code, _responseCodeToString(_code));
   out.concat(buf);
 
   if (_sendContentLength) {

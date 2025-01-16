@@ -57,7 +57,7 @@ class AsyncCallbackWebHandler : public AsyncWebHandler {
 private:
 protected:
   std::string _uri;
-  WebRequestMethodComposite _method;
+  HttpRequestMethod _method;
   ArRequestHandlerFunction _onRequest;
   ArUploadHandlerFunction _onUpload;
   ArBodyHandlerFunction _onBody;
@@ -78,7 +78,7 @@ public:
     _uri     = uri;
     _isRegex = uri.length() > 1 && uri.front() == '^' && uri.back() == '$';
   }
-  void setMethod(WebRequestMethodComposite method) { _method = method; }
+  void setMethod(HttpRequestMethod method) { _method = method; }
   void onRequest(ArRequestHandlerFunction fn) { _onRequest = fn; }
   void onUpload(ArUploadHandlerFunction fn) { _onUpload = fn; }
   void onBody(ArBodyHandlerFunction fn) { _onBody = fn; }

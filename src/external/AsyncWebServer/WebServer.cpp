@@ -107,7 +107,7 @@ void AsyncWebServer::_attachHandler(AsyncWebServerRequest* request)
   request->setHandler(_catchAllHandler);
 }
 
-AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload, ArBodyHandlerFunction onBody)
+AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, HttpRequestMethod method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload, ArBodyHandlerFunction onBody)
 {
   AsyncCallbackWebHandler* handler = new AsyncCallbackWebHandler();
   handler->setUri(uri);
@@ -119,7 +119,7 @@ AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, WebRequestMethodCom
   return *handler;
 }
 
-AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload)
+AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, HttpRequestMethod method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload)
 {
   AsyncCallbackWebHandler* handler = new AsyncCallbackWebHandler();
   handler->setUri(uri);
@@ -130,7 +130,7 @@ AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, WebRequestMethodCom
   return *handler;
 }
 
-AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest)
+AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, HttpRequestMethod method, ArRequestHandlerFunction onRequest)
 {
   AsyncCallbackWebHandler* handler = new AsyncCallbackWebHandler();
   handler->setUri(uri);

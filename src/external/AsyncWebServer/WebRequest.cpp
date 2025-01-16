@@ -21,6 +21,7 @@
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebResponseImpl.h"
 
+#include "Convert.h"
 #include "util/HexUtils.h"
 
 static const std::string SharedEmptyString = std::string();
@@ -35,6 +36,105 @@ enum {
   PARSE_REQ_FAIL
 };
 
+static bool httpTryBasicUriDecode(std::string_view uri, std::string& uri_out)
+{
+  uri_out.clear();
+
+  if (uri.empty()) return false;
+
+  uri_out.reserve(uri.length());
+
+  for (std::size_t i = 0; i < uri.length(); ++i) {
+    char c = uri[i];
+
+    // Escaped character handling
+    if (c == '%') [[unlikely]] {
+      // Check if theres enough space for the two hex chars
+      if (i + 2 >= uri.length()) {
+        uri_out.clear();
+        return false;
+      }
+
+      // Decode the hex characters
+      uint8_t decoded = 0;
+      if (!OpenShock::HexUtils::TryParseHexPair(uri[i + 1], uri[i + 2], decoded)) {
+        uri_out.clear();
+        return false;
+      }
+
+      // Push back the decoded character
+      uri_out.push_back(static_cast<char>(decoded));
+
+      // Skip the hex characters
+      i += 2;
+
+      continue;
+    }
+
+    // Fail on whitespace
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') [[unlikely]] {
+      uri_out.clear();
+      return false;
+    }
+
+    // Push back the hopefully valid character
+    uri_out.push_back(c);
+  }
+
+  return true;
+}
+
+static bool httpParseMethod(std::string_view str, HttpRequestMethod& method_out)
+{
+  using namespace std::string_view_literals;
+
+  if (str == "GET"sv) {
+    method_out = HTTP_GET;
+  } else if (str == "POST"sv) {
+    method_out = HTTP_POST;
+  } else if (str == "DELETE"sv) {
+    method_out = HTTP_DELETE;
+  } else if (str == "PUT"sv) {
+    method_out = HTTP_PUT;
+  } else if (str == "PATCH"sv) {
+    method_out = HTTP_PATCH;
+  } else if (str == "HEAD"sv) {
+    method_out = HTTP_HEAD;
+  } else if (str == "OPTIONS"sv) {
+    method_out = HTTP_OPTIONS;
+  } else if (str == "CONNECT"sv) {
+    method_out = HTTP_CONNECT;
+  } else if (str == "TRACE"sv) {
+    method_out = HTTP_TRACE;
+  } else {
+    return false;
+  }
+
+  return true;
+}
+static bool httpParseHttpVersion(std::string_view str, HttpVersion& http_version_out)
+{
+  using namespace std::string_view_literals;
+  if (!OpenShock::StringStartsWith(str, "HTTP/"sv)) {
+    return false;
+  }
+
+  std::size_t dot_pos = str.find('.', 5);
+  if (dot_pos == std::string_view::npos) {
+    return false;
+  }
+
+  if (!OpenShock::Convert::ToUint8(str.substr(5, dot_pos), http_version_out.major)) {
+    return false;
+  }
+
+  if (!OpenShock::Convert::ToUint8(str.substr(dot_pos + 1), http_version_out.minor)) {
+    return false;
+  }
+
+  return true;
+}
+
 AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   : _client(c)
   , _server(s)
@@ -42,7 +142,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _response(NULL)
   , _temp()
   , _parseState(0)
-  , _version(0)
+  , _version {}
   , _method(HTTP_ANY)
   , _url()
   , _host()
@@ -273,7 +373,7 @@ void AsyncWebServerRequest::_addPathParam(const char* p)
   _pathParams.add(new std::string(p));
 }
 
-void AsyncWebServerRequest::_addGetParams(std::string_view params)
+void AsyncWebServerRequest::_parseQueryParams(std::string_view params)
 {
   size_t start = 0;
   while (start < params.length()) {
@@ -290,41 +390,50 @@ void AsyncWebServerRequest::_addGetParams(std::string_view params)
 
 bool AsyncWebServerRequest::_parseReqHead()
 {
-  // Split the head into method, url and version
-  int index = _temp.indexOf(' ');
-  String m  = _temp.substring(0, index);
-  index     = _temp.indexOf(' ', index + 1);
-  String u  = _temp.substring(m.length() + 1, index);
-  _temp     = _temp.substring(index + 1);
+  using namespace std::string_view_literals;
 
-  if (m == "GET") {
-    _method = HTTP_GET;
-  } else if (m == "POST") {
-    _method = HTTP_POST;
-  } else if (m == "DELETE") {
-    _method = HTTP_DELETE;
-  } else if (m == "PUT") {
-    _method = HTTP_PUT;
-  } else if (m == "PATCH") {
-    _method = HTTP_PATCH;
-  } else if (m == "HEAD") {
-    _method = HTTP_HEAD;
-  } else if (m == "OPTIONS") {
-    _method = HTTP_OPTIONS;
+  std::string_view body = _temp;
+
+  std::size_t start_pos = 0, end_pos = 0;
+
+  // Get request method
+  end_pos = body.find(' ', start_pos);
+  if (end_pos == std::string_view::npos) {
+    return false;  // Should respond: 400 Bad Request
+  }
+  std::string_view method_str = body.substr(start_pos, end_pos);
+
+  // Get request URI
+  start_pos = end_pos + 1;
+  end_pos   = body.find(' ', start_pos);
+  if (end_pos == std::string_view::npos) {
+    return false;  // Should respond: 400 Bad Request
+  }
+  std::string_view request_uri = body.substr(start_pos, end_pos);
+
+  // Get request HTTP version
+  start_pos = end_pos + 1;
+  end_pos   = body.find("\r\n"sv, start_pos);
+  if (end_pos == std::string_view::npos) {
+    return false;  // Should respond: 400 Bad Request
+  }
+  std::string_view http_version_str = body.substr(start_pos, end_pos);
+
+  // Parse request method
+  if (!httpParseMethod(method_str, _method)) {
+    return false;  // Should respond: 405 Method Not Allowed
   }
 
-  String g = String();
-  index    = u.indexOf('?');
-  if (index > 0) {
-    g = u.substring(index + 1);
-    u = u.substring(0, index);
+  // Parse request URI
+  if (!httpTryBasicUriDecode(request_uri, _url)) {
+    return false;  // Should respond: 400 Bad Request
   }
-  _url = urlDecode(u);
-  _addGetParams(g);
 
-  if (!_temp.startsWith("HTTP/1.0")) _version = 1;
+  // Parse request HTTP version
+  if (!httpParseHttpVersion(http_version_str, _version)) {
+    return false;  // Should respond: 400 Bad Request
+  }
 
-  _temp = String();
   return true;
 }
 
@@ -758,7 +867,7 @@ AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(std::string_view co
 
 AsyncWebServerResponse* AsyncWebServerRequest::beginChunkedResponse(std::string_view contentType, AwsResponseFiller callback)
 {
-  if (_version) return new AsyncChunkedResponse(contentType, callback);
+  if (_version.minor > 0) return new AsyncChunkedResponse(contentType, callback);
   return new AsyncCallbackResponse(contentType, 0, callback);
 }
 
