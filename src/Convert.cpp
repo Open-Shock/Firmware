@@ -120,10 +120,8 @@ constexpr bool spanToST(std::string_view str, T& val)
 
   bool negative = str.front() == '-';
   if (negative) {
-    str = str.substr(1);
-    if (str.empty()) {
-      return false;
-    }
+    if (str.length() == 1) return false;
+    str.remove_suffix(1);
   }
 
   typename std::make_unsigned<T>::type i = 0;
@@ -183,6 +181,11 @@ void Convert::FromUint64(uint64_t val, std::string& str)
   fromT(val, str);
 }
 
+void Convert::FromSizeT(size_t val, std::string& str)
+{
+  fromT(val, str);
+}
+
 void Convert::FromBool(bool val, std::string& str)
 {
   if (val) {
@@ -226,6 +229,10 @@ bool Convert::ToInt64(std::string_view str, int64_t& val)
   return spanToST(str, val);
 }
 bool Convert::ToUint64(std::string_view str, uint64_t& val)
+{
+  return spanToUT(str, val);
+}
+bool Convert::ToSizeT(std::string_view str, size_t& val)
 {
   return spanToUT(str, val);
 }
@@ -331,7 +338,7 @@ static_assert(test_spanToUT64Overflow(), "test_spanToUT64Overflow failed");
 constexpr bool test_spanToST8()
 {
   int8_t i8 = 0;
-  return spanToST("-127"sv, i8) && i8 == -127;
+  return spanToST("-128"sv, i8) && i8 == -128;
 }
 
 static_assert(test_spanToST8(), "test_spanToST8 failed");
@@ -347,7 +354,7 @@ static_assert(test_spanToST16(), "test_spanToST16 failed");
 constexpr bool test_spanToST32()
 {
   int32_t i32 = 0;
-  return spanToST("-2147483647"sv, i32) && i32 == -2'147'483'647;
+  return spanToST("-2147483648"sv, i32) && i32 == -2'147'483'648;
 }
 
 static_assert(test_spanToST32(), "test_spanToST32 failed");

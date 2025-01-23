@@ -22,24 +22,10 @@
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebResponseImpl.h"
 
+#include "Convert.h"
+#include "util/HexUtils.h"
+
 #include <unordered_map>
-
-/// Hash function for Arduino String
-namespace std {
-  template<>
-  struct hash<String> {
-    size_t operator()(std::string_view _Keyval) const noexcept { return (std::_Hash_bytes(_Keyval.c_str(), _Keyval.length(), 0)); }
-  };
-}  // namespace std
-
-// Since ESP8266 does not link memchr by default, here's its implementation.
-void* memchr(void* ptr, int ch, size_t count)
-{
-  unsigned char* p = static_cast<unsigned char*>(ptr);
-  while (count--)
-    if (*p++ == static_cast<unsigned char>(ch)) return --p;
-  return nullptr;
-}
 
 /*
  * Abstract Response
@@ -178,33 +164,38 @@ void AsyncWebServerResponse::addHeader(std::string_view name, std::string_view v
 
 std::string AsyncWebServerResponse::_assembleHead(HttpVersion version)
 {
-  if (version) {
+  if (version.minor > 0) {
     addHeader("Accept-Ranges", "none");
     if (_chunked) addHeader("Transfer-Encoding", "chunked");
   }
-  String out  = String();
-  int bufSize = 300;
-  char buf[bufSize];
+  std::string out = std::string();
 
-  snprintf(buf, bufSize, "HTTP/%d.%d %d %s\r\n", version.major, version.minor, _code, _responseCodeToString(_code));
-  out.concat(buf);
+  using namespace std::string_view_literals;
+
+  OpenShock::FormatToString(out, "HTTP/%d.%d %d ", version.major, version.minor, _code);
+  out += _responseCodeToString(_code);
 
   if (_sendContentLength) {
-    snprintf(buf, bufSize, "Content-Length: %d\r\n", _contentLength);
-    out.concat(buf);
+    out += "Content-Length: "sv;
+    OpenShock::Convert::FromSizeT(_contentLength, out);
+    out += "\r\n"sv;
   }
+
   if (_contentType.length()) {
-    snprintf(buf, bufSize, "Content-Type: %s\r\n", _contentType.c_str());
-    out.concat(buf);
+    out += "Content-Type: "sv;
+    out += _contentType;
+    out += "\r\n"sv;
   }
 
   for (const auto& header : _headers) {
-    snprintf(buf, bufSize, "%s: %s\r\n", header->name().c_str(), header->value().c_str());
-    out.concat(buf);
+    out += header->name();
+    out += ": "sv;
+    out += header->value();
+    out += "\r\n"sv;
   }
   _headers.free();
 
-  out.concat("\r\n");
+  out += "\r\n"sv;
   return out;
 }
 
@@ -238,7 +229,7 @@ size_t AsyncWebServerResponse::_ack(AsyncWebServerRequest* request, size_t len, 
 }
 
 /*
- * String/Code Response
+ * std::string/Code Response
  * */
 AsyncBasicResponse::AsyncBasicResponse(int code, std::string_view contentType, std::string_view content)
 {
@@ -254,37 +245,44 @@ AsyncBasicResponse::AsyncBasicResponse(int code, std::string_view contentType, s
 
 void AsyncBasicResponse::_respond(AsyncWebServerRequest* request)
 {
-  _state        = RESPONSE_HEADERS;
-  String out    = _assembleHead(request->version());
-  size_t outLen = out.length();
-  size_t space  = request->client()->space();
-  if (!_contentLength && space >= outLen) {
-    _writtenLength += request->client()->write(out.c_str(), outLen);
+  _state          = RESPONSE_HEADERS;
+  std::string out = _assembleHead(request->version());
+  size_t space    = request->client()->space();
+
+  if (!_contentLength && space >= out.size()) {
+    _writtenLength += request->client()->write(out.data(), out.size());
     _state = RESPONSE_WAIT_ACK;
-  } else if (_contentLength && space >= outLen + _contentLength) {
-    out += _content;
-    outLen += _contentLength;
-    _writtenLength += request->client()->write(out.c_str(), outLen);
-    _state = RESPONSE_WAIT_ACK;
-  } else if (space && space < outLen) {
-    String partial = out.substring(0, space);
-    _content       = out.substring(space) + _content;
-    _contentLength += outLen - space;
-    _writtenLength += request->client()->write(partial.c_str(), partial.length());
-    _state = RESPONSE_CONTENT;
-  } else if (space > outLen && space < (outLen + _contentLength)) {
-    size_t shift = space - outLen;
-    outLen += shift;
-    _sentLength += shift;
-    out += _content.substring(0, shift);
-    _content = _content.substring(shift);
-    _writtenLength += request->client()->write(out.c_str(), outLen);
-    _state = RESPONSE_CONTENT;
-  } else {
-    _content = out + _content;
-    _contentLength += outLen;
-    _state = RESPONSE_CONTENT;
+    return;
   }
+
+  if (_contentLength && space >= out.size() + _contentLength) {
+    out += _content;
+    _writtenLength += request->client()->write(out.data(), out.size());
+    _state = RESPONSE_WAIT_ACK;
+    return;
+  }
+
+  if (space && space < out.size()) {
+    _content.insert(_content.begin(), out.begin() + space, out.end());
+    _contentLength += out.size() - space;
+    _writtenLength += request->client()->write(out.data(), space);
+    _state = RESPONSE_CONTENT;
+    return;
+  }
+
+  if (space > out.size() && space < (out.size() + _contentLength)) {
+    size_t shift = space - out.size();
+    out += std::string_view(_content).substr(0, shift);
+    _content.erase(0, shift);
+    _sentLength += shift;
+    _writtenLength += request->client()->write(out.c_str(), out.length());
+    _state = RESPONSE_CONTENT;
+    return;
+  }
+
+  _content.insert(_content.begin(), out.begin(), out.end());
+  _contentLength += out.size();
+  _state = RESPONSE_CONTENT;
 }
 
 size_t AsyncBasicResponse::_ack(AsyncWebServerRequest* request, size_t len, uint32_t time)
@@ -297,16 +295,16 @@ size_t AsyncBasicResponse::_ack(AsyncWebServerRequest* request, size_t len, uint
     // we can fit in this packet
     if (space > available) {
       _writtenLength += request->client()->write(_content.c_str(), available);
-      _content = String();
-      _state   = RESPONSE_WAIT_ACK;
+      _content.clear();
+      _state = RESPONSE_WAIT_ACK;
       return available;
     }
     // send some data, the rest on ack
-    String out = _content.substring(0, space);
-    _content   = _content.substring(space);
-    _sentLength += space;
-    _writtenLength += request->client()->write(out.c_str(), space);
-    return space;
+    size_t nWrite = std::min(_content.size(), space);
+    _sentLength += nWrite;
+    _writtenLength += request->client()->write(_content.data(), nWrite);
+    _content.erase(0, nWrite);
+    return nWrite;
   } else if (_state == RESPONSE_WAIT_ACK) {
     if (_ackedLength >= _writtenLength) {
       _state = RESPONSE_END;
@@ -339,73 +337,70 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest* request, size_t len, u
     request->client()->close();
     return 0;
   }
+
   _ackedLength += len;
   size_t space = request->client()->space();
 
-  size_t headLen = _head.length();
   if (_state == RESPONSE_HEADERS) {
-    if (space >= headLen) {
-      _state = RESPONSE_CONTENT;
-      space -= headLen;
-    } else {
-      String out = _head.substring(0, space);
-      _head      = _head.substring(space);
-      _writtenLength += request->client()->write(out.c_str(), out.length());
-      return out.length();
+    if (space < _head.size()) {
+      _writtenLength += request->client()->write(_head.data(), space);
+      _head.erase(0, space);
+      return space;
     }
+
+    space -= _head.size();
+    _state = RESPONSE_CONTENT;
   }
 
   if (_state == RESPONSE_CONTENT) {
     size_t outLen;
+
     if (_chunked) {
       if (space <= 8) {
         return 0;
       }
-      outLen = space;
-    } else if (!_sendContentLength) {
-      outLen = space;
+      outLen = std::min(space, (size_t)9999);  // Limit to 4 digits
+    } else if (_sendContentLength) {
+      outLen = std::min(space, _contentLength - _sentLength);
     } else {
-      outLen = ((_contentLength - _sentLength) > space) ? space : (_contentLength - _sentLength);
+      outLen = space;
     }
 
-    uint8_t* buf = (uint8_t*)malloc(outLen + headLen);
-    if (!buf) {
+    uint8_t* buf = (uint8_t*)malloc(outLen);
+    if (buf == nullptr) {
       // os_printf("_ack malloc %d failed\n", outLen+headLen);
       return 0;
-    }
-
-    if (headLen) {
-      memcpy(buf, _head.c_str(), _head.length());
     }
 
     size_t readLen = 0;
 
     if (_chunked) {
-      // HTTP 1.1 allows leading zeros in chunk length.
-      // See RFC2616 sections 2, 3.6.1.
-      readLen = _fillBuffer(buf + headLen + 6, outLen - 8);
+      readLen = _fillBuffer(buf + 6, outLen - 8);
       if (readLen == RESPONSE_TRY_AGAIN) {
         free(buf);
         return 0;
       }
-      outLen        = sprintf((char*)buf + headLen, "%04x", readLen) + headLen;
+
+      if (sprintf((char*)buf, "%04X", readLen) != 4) {
+        // TODO: Handle weird error
+      }
+
+      outLen        = 4;
       buf[outLen++] = '\r';
       buf[outLen++] = '\n';
       outLen += readLen;
       buf[outLen++] = '\r';
       buf[outLen++] = '\n';
     } else {
-      readLen = _fillBuffer(buf + headLen, outLen);
+      readLen = _fillBuffer(buf, outLen);
       if (readLen == RESPONSE_TRY_AGAIN) {
         free(buf);
         return 0;
       }
-      outLen = readLen + headLen;
+      outLen = readLen;
     }
 
-    if (headLen) {
-      _head = String();
-    }
+    _head.clear();
 
     if (outLen) {
       _writtenLength += request->client()->write((const char*)buf, outLen);
@@ -414,7 +409,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest* request, size_t len, u
     if (_chunked) {
       _sentLength += readLen;
     } else {
-      _sentLength += outLen - headLen;
+      _sentLength += outLen;
     }
 
     free(buf);
@@ -423,12 +418,15 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest* request, size_t len, u
       _state = RESPONSE_WAIT_ACK;
     }
     return outLen;
-  } else if (_state == RESPONSE_WAIT_ACK) {
+  }
+
+  if (_state == RESPONSE_WAIT_ACK) {
     if (!_sendContentLength || _ackedLength >= _writtenLength) {
       _state = RESPONSE_END;
       if (!_chunked && !_sendContentLength) request->client()->close(true);
     }
   }
+
   return 0;
 }
 
@@ -457,38 +455,40 @@ AsyncFileResponse::~AsyncFileResponse()
 
 void AsyncFileResponse::_setContentType(std::string_view path)
 {
-  const char* const BINARY_MIME = "application/octet-stream";
+  using namespace std::string_view_literals;
 
-  static std::unordered_map<String, const char* const> mimeTypes = {
-    { ".html",              "text/html"},
-    {  ".htm",              "text/html"},
-    {  ".css",               "text/css"},
-    { ".json",       "application/json"},
-    {   ".js", "application/javascript"},
-    {  ".png",              "image/png"},
-    {  ".gif",              "image/gif"},
-    {  ".jpg",             "image/jpeg"},
-    {  ".ico",           "image/x-icon"},
-    {  ".svg",          "image/svg+xml"},
-    {  ".eot",               "font/eot"},
-    { ".woff",              "font/woff"},
-    {".woff2",             "font/woff2"},
-    {  ".ttf",               "font/ttf"},
-    {  ".xml",               "text/xml"},
-    {  ".pdf",        "application/pdf"},
-    {  ".zip",        "application/zip"},
-    {   ".gz",     "application/x-gzip"},
-    {  ".txt",             "text/plain"},
-    {  ".bin",              BINARY_MIME},
+  const std::string_view BINARY_MIME = "application/octet-stream"sv;
+
+  static std::unordered_map<std::string_view, std::string_view> mimeTypes = {
+    { ".html"sv,              "text/html"sv},
+    {  ".htm"sv,              "text/html"sv},
+    {  ".css"sv,               "text/css"sv},
+    { ".json"sv,       "application/json"sv},
+    {   ".js"sv, "application/javascript"sv},
+    {  ".png"sv,              "image/png"sv},
+    {  ".gif"sv,              "image/gif"sv},
+    {  ".jpg"sv,             "image/jpeg"sv},
+    {  ".ico"sv,           "image/x-icon"sv},
+    {  ".svg"sv,          "image/svg+xml"sv},
+    {  ".eot"sv,               "font/eot"sv},
+    { ".woff"sv,              "font/woff"sv},
+    {".woff2"sv,             "font/woff2"sv},
+    {  ".ttf"sv,               "font/ttf"sv},
+    {  ".xml"sv,               "text/xml"sv},
+    {  ".pdf"sv,        "application/pdf"sv},
+    {  ".zip"sv,        "application/zip"sv},
+    {   ".gz"sv,     "application/x-gzip"sv},
+    {  ".txt"sv,             "text/plain"sv},
+    {  ".bin"sv,                BINARY_MIME},
   };
 
-  int lastDot = path.lastIndexOf('.');
-  if (lastDot < 0) {
+  size_t lastDot = path.find_last_of('.');
+  if (lastDot == std::string_view::npos) {
     _contentType = BINARY_MIME;
     return;
   }
 
-  String extension = path.substring(lastDot);
+  std::string_view extension = path.substr(lastDot);
 
   auto it = mimeTypes.find(extension);
   if (it == mimeTypes.end()) {
@@ -502,17 +502,20 @@ void AsyncFileResponse::_setContentType(std::string_view path)
 AsyncFileResponse::AsyncFileResponse(FS& fs, std::string_view path, std::string_view contentType, bool download)
   : AsyncAbstractResponse()
 {
-  _code = 200;
-  _path = path;
+  _code             = 200;
+  _path             = path;
+  String arduPath   = OpenShock::StringToArduinoString(path);
+  String arduGzPath = arduPath + ".gz";
 
-  if (!download && !fs.exists(_path) && fs.exists(_path + ".gz")) {
-    _path = _path + ".gz";
+  if (!download && !fs.exists(arduPath) && fs.exists(arduGzPath)) {
+    _path    = _path + ".gz";
+    arduPath = arduGzPath;
     addHeader("Content-Encoding", "gzip");
     _sendContentLength = true;
     _chunked           = false;
   }
 
-  _content       = fs.open(_path, "rb");
+  _content       = fs.open(arduPath, "rb");
   _contentLength = _content.size();
 
   if (contentType == "")
@@ -520,18 +523,29 @@ AsyncFileResponse::AsyncFileResponse(FS& fs, std::string_view path, std::string_
   else
     _contentType = contentType;
 
-  int filenameStart = path.lastIndexOf('/') + 1;
-  char buf[26 + path.length() - filenameStart];
-  char* filename = (char*)path.c_str() + filenameStart;
+  std::string_view filename = path;
+  size_t filenameStart      = path.find_last_of('/');
+  if (filenameStart != std::string_view::npos) {
+    filename.remove_prefix(filenameStart + 1);
+  }
+
+  std::string contentDisp;
+  contentDisp.reserve(26 + filename.size());
+
+  using namespace std::string_view_literals;
 
   if (download) {
     // set filename and force download
-    snprintf(buf, sizeof(buf), "attachment; filename=\"%s\"", filename);
+    contentDisp.append("attachment; filename=\""sv);
   } else {
     // set filename and force rendering
-    snprintf(buf, sizeof(buf), "inline; filename=\"%s\"", filename);
+    contentDisp.append("inline; filename=\""sv);
   }
-  addHeader("Content-Disposition", buf);
+
+  contentDisp.append(filename);
+  contentDisp.push_back('"');
+
+  addHeader("Content-Disposition", contentDisp);
 }
 
 AsyncFileResponse::AsyncFileResponse(File content, std::string_view path, std::string_view contentType, bool download)
@@ -540,7 +554,9 @@ AsyncFileResponse::AsyncFileResponse(File content, std::string_view path, std::s
   _code = 200;
   _path = path;
 
-  if (!download && String(content.name()).endsWith(".gz") && !path.endsWith(".gz")) {
+  using namespace std::string_view_literals;
+
+  if (!download && OpenShock::StringEndsWith(content.name(), ".gz"sv) && !OpenShock::StringEndsWith(path, ".gz"sv)) {
     addHeader("Content-Encoding", "gzip");
     _sendContentLength = true;
     _chunked           = false;
@@ -549,21 +565,35 @@ AsyncFileResponse::AsyncFileResponse(File content, std::string_view path, std::s
   _content       = content;
   _contentLength = _content.size();
 
+  // TODO: The rest of this function is identical to the function above (AsyncFileResponse::AsyncFileResponse(FS&,std::string_view,std::string_view,bool)), merge this logic
   if (contentType == "")
     _setContentType(path);
   else
     _contentType = contentType;
 
-  int filenameStart = path.lastIndexOf('/') + 1;
-  char buf[26 + path.length() - filenameStart];
-  char* filename = (char*)path.c_str() + filenameStart;
+  std::string_view filename = path;
+  size_t filenameStart      = path.find_last_of('/');
+  if (filenameStart != std::string_view::npos) {
+    filename.remove_prefix(filenameStart + 1);
+  }
+
+  std::string contentDisp;
+  contentDisp.reserve(26 + filename.size());
+
+  using namespace std::string_view_literals;
 
   if (download) {
-    snprintf(buf, sizeof(buf), "attachment; filename=\"%s\"", filename);
+    // set filename and force download
+    contentDisp.append("attachment; filename=\""sv);
   } else {
-    snprintf(buf, sizeof(buf), "inline; filename=\"%s\"", filename);
+    // set filename and force rendering
+    contentDisp.append("inline; filename=\""sv);
   }
-  addHeader("Content-Disposition", buf);
+
+  contentDisp.append(filename);
+  contentDisp.push_back('"');
+
+  addHeader("Content-Disposition", contentDisp);
 }
 
 size_t AsyncFileResponse::_fillBuffer(uint8_t* data, size_t len)
@@ -640,33 +670,6 @@ size_t AsyncChunkedResponse::_fillBuffer(uint8_t* data, size_t len)
     _filledLength += ret;
   }
   return ret;
-}
-
-/*
- * Progmem Response
- * */
-
-AsyncProgmemResponse::AsyncProgmemResponse(int code, std::string_view contentType, const uint8_t* content, size_t len)
-  : AsyncAbstractResponse()
-{
-  _code          = code;
-  _content       = content;
-  _contentType   = contentType;
-  _contentLength = len;
-  _readLength    = 0;
-}
-
-size_t AsyncProgmemResponse::_fillBuffer(uint8_t* data, size_t len)
-{
-  size_t left = _contentLength - _readLength;
-  if (left > len) {
-    memcpy_P(data, _content + _readLength, len);
-    _readLength += len;
-    return len;
-  }
-  memcpy_P(data, _content + _readLength, left);
-  _readLength += left;
-  return left;
 }
 
 /*

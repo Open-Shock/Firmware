@@ -112,17 +112,6 @@ public:
   virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
 };
 
-class AsyncProgmemResponse : public AsyncAbstractResponse {
-private:
-  const uint8_t* _content;
-  size_t _readLength;
-
-public:
-  AsyncProgmemResponse(int code, std::string_view contentType, const uint8_t* content, size_t len);
-  bool _sourceValid() const { return true; }
-  virtual size_t _fillBuffer(uint8_t* buf, size_t maxLen) override;
-};
-
 class cbuf;
 
 class AsyncResponseStream

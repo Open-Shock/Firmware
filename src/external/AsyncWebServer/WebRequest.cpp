@@ -119,16 +119,13 @@ static bool httpParseHttpVersion(std::string_view str, HttpVersion& http_version
     return false;
   }
 
-  std::size_t dot_pos = str.find('.', 5);
-  if (dot_pos == std::string_view::npos) {
+  auto pair = OpenShock::StringSplitByFirst(str.substr(5), '.');
+
+  if (!OpenShock::Convert::ToUint8(pair.first, http_version_out.major)) {
     return false;
   }
 
-  if (!OpenShock::Convert::ToUint8(str.substr(5, dot_pos), http_version_out.major)) {
-    return false;
-  }
-
-  if (!OpenShock::Convert::ToUint8(str.substr(dot_pos + 1), http_version_out.minor)) {
+  if (!OpenShock::Convert::ToUint8(pair.second, http_version_out.minor)) {
     return false;
   }
 
@@ -158,7 +155,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _parsedLength(0)
   , _headers(LinkedList<AsyncWebHeader*>([](AsyncWebHeader* h) { delete h; }))
   , _params(LinkedList<AsyncWebParameter*>([](AsyncWebParameter* p) { delete p; }))
-  , _pathParams(LinkedList<String*>([](String* p) { delete p; }))
+  , _pathParams(LinkedList<std::string*>([](std::string* p) { delete p; }))
   , _multiParseState(0)
   , _boundaryPosition(0)
   , _itemStartIndex(0)
@@ -375,16 +372,13 @@ void AsyncWebServerRequest::_addPathParam(const char* p)
 
 void AsyncWebServerRequest::_parseQueryParams(std::string_view params)
 {
-  size_t start = 0;
-  while (start < params.length()) {
-    int end = params.indexOf('&', start);
-    if (end < 0) end = params.length();
-    int equal = params.indexOf('=', start);
-    if (equal < 0 || equal > end) equal = end;
-    String name  = params.substring(start, equal);
-    String value = equal + 1 < end ? params.substring(equal + 1, end) : String();
-    _addParam(new AsyncWebParameter(urlDecode(name), urlDecode(value)));
-    start = end + 1;
+  while (!params.empty()) {
+    auto pair = OpenShock::StringSplitByFirst(params, '&');
+    params    = pair.second;
+
+    pair = OpenShock::StringSplitByFirst(pair.first, '=');
+
+    _addParam(new AsyncWebParameter(urlDecode(pair.first), urlDecode(pair.second)));
   }
 }
 
@@ -424,6 +418,13 @@ bool AsyncWebServerRequest::_parseReqHead()
     return false;  // Should respond: 405 Method Not Allowed
   }
 
+  // Parse request URI query
+  size_t query_pos = request_uri.find('?');
+  if (query_pos != std::string_view::npos) {
+    _parseQueryParams(request_uri.substr(query_pos + 1));
+    request_uri.remove_suffix(request_uri.size() - query_pos);
+  }
+
   // Parse request URI
   if (!httpTryBasicUriDecode(request_uri, _url)) {
     return false;  // Should respond: 400 Bad Request
@@ -437,82 +438,78 @@ bool AsyncWebServerRequest::_parseReqHead()
   return true;
 }
 
-bool strContains(String src, String find, bool mindcase = true)
+bool AsyncWebServerRequest::_parseReqHeader(std::string_view header)
 {
-  int pos = 0, i = 0;
-  const int slen = src.length();
-  const int flen = find.length();
+  auto pair = OpenShock::StringSplitByFirst(header, ':');
 
-  if (slen < flen) return false;
-  while (pos <= (slen - flen)) {
-    for (i = 0; i < flen; i++) {
-      if (mindcase) {
-        if (src[pos + i] != find[i]) i = flen + 1;  // no match
-      } else if (tolower(src[pos + i]) != tolower(find[i]))
-        i = flen + 1;                               // no match
+  using namespace std::string_view_literals;
+
+  if (OpenShock::StringIEquals(pair.first, "Host"sv)) {
+    _host = pair.second;
+  } else if (OpenShock::StringIEquals(pair.first, "Content-Type"sv)) {
+    _contentType = OpenShock::StringBeforeFirst(pair.second, ';');
+    if (OpenShock::StringStartsWith(_contentType, "multipart/"sv)) {
+      _boundary = OpenShock::StringAfterFirst(pair.second, '=');
+      _boundary.replace("\"", "");  // TODO: Optimize this by merging with string_view assignment
+      _isMultipart = true;
     }
-    if (i == flen) return true;
-    pos++;
-  }
-  return false;
-}
-
-bool AsyncWebServerRequest::_parseReqHeader()
-{
-  int index = _temp.indexOf(':');
-  if (index) {
-    String name  = _temp.substring(0, index);
-    String value = _temp.substring(index + 2);
-    if (name.equalsIgnoreCase("Host")) {
-      _host = value;
-    } else if (name.equalsIgnoreCase("Content-Type")) {
-      _contentType = value.substring(0, value.indexOf(';'));
-      if (value.startsWith("multipart/")) {
-        _boundary = value.substring(value.indexOf('=') + 1);
-        _boundary.replace("\"", "");
-        _isMultipart = true;
-      }
-    } else if (name.equalsIgnoreCase("Content-Length")) {
-      _contentLength = atoi(value.c_str());
-    } else if (name.equalsIgnoreCase("Expect") && value == "100-continue") {
+  } else if (OpenShock::StringIEquals(pair.first, "Content-Length"sv)) {
+    if (!OpenShock::Convert::ToSizeT(pair.second, _contentLength)) {
+      return false;
+    }
+  } else if (OpenShock::StringIEquals(pair.first, "Expect"sv)) {
+    if (pair.second == "100-continue") {
       _expectingContinue = true;
-    } else if (name.equalsIgnoreCase("Authorization")) {
-      if (value.length() > 5 && value.substring(0, 5).equalsIgnoreCase("Basic")) {
-        _authorization = value.substring(6);
-      } else if (value.length() > 6 && value.substring(0, 6).equalsIgnoreCase("Digest")) {
-        _isDigest      = true;
-        _authorization = value.substring(7);
-      }
-    } else {
-      if (name.equalsIgnoreCase("Upgrade") && value.equalsIgnoreCase("websocket")) {
-        // WebSocket request can be uniquely identified by header: [Upgrade: websocket]
-        _reqconntype = RCT_WS;
-      } else {
-        if (name.equalsIgnoreCase("Accept") && strContains(value, "text/event-stream", false)) {
-          // WebEvent request can be uniquely identified by header:  [Accept: text/event-stream]
-          _reqconntype = RCT_EVENT;
-        }
-      }
     }
-    _headers.add(new AsyncWebHeader(name, value));
+  } else if (OpenShock::StringIEquals(pair.first, "Authorization"sv)) {
+    if (OpenShock::StringHasPrefixIC(pair.second, "Basic"sv)) {
+      _authorization = pair.second.substr(6);  // TODO: validate seperator
+    } else if (OpenShock::StringHasPrefixIC(pair.second, "Digest"sv)) {
+      _isDigest      = true;
+      _authorization = pair.second.substr(7);  // TODO: validate seperator
+    }
+  } else if (OpenShock::StringIEquals(pair.first, "Upgrade"sv)) {
+    if (OpenShock::StringIEquals(pair.second, "websocket"sv)) {
+      // WebSocket request can be uniquely identified by header: [Upgrade: websocket]
+      _reqconntype = RCT_WS;
+    }
+  } else if (OpenShock::StringIEquals(pair.first, "Accept"sv)) {
+    if (OpenShock::StringIContains(pair.second, "text/event-stream"sv)) {
+      // WebEvent request can be uniquely identified by header:  [Accept: text/event-stream]
+      _reqconntype = RCT_EVENT;
+    }
   }
-  _temp = String();
+
+  _headers.add(new AsyncWebHeader(pair.first, pair.second));
+
+  _temp.clear();
   return true;
 }
 
 void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data)
 {
-  if (data && (char)data != '&') _temp += (char)data;
-  if (!data || (char)data == '&' || _parsedLength == _contentLength) {
-    String name  = "body";
-    String value = _temp;
-    if (!_temp.startsWith("{") && !_temp.startsWith("[") && _temp.indexOf('=') > 0) {
-      name  = _temp.substring(0, _temp.indexOf('='));
-      value = _temp.substring(_temp.indexOf('=') + 1);
-    }
-    _addParam(new AsyncWebParameter(urlDecode(name), urlDecode(value), true));
-    _temp = String();
+  if (data && (char)data != '&') {
+    _temp += (char)data;
+    return;
   }
+
+  if (_parsedLength != _contentLength) return;
+
+  using namespace std::string_view_literals;
+
+  std::string_view name  = "body"sv;
+  std::string_view value = _temp;
+
+  if (!OpenShock::StringStartsWith(value, '{') && !OpenShock::StringStartsWith(value, '[')) {
+    size_t equals_pos = value.find('=');
+    if (equals_pos != std::string_view::npos) {
+      name  = value.substr(0, equals_pos);
+      value = value.substr(equals_pos + 1);
+    }
+  }
+
+  _addParam(new AsyncWebParameter(urlDecode(name), urlDecode(value), true));
+  _temp = std::string();
 }
 
 void AsyncWebServerRequest::_handleUploadByte(uint8_t data, bool last)
@@ -554,9 +551,9 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
   if (!_parsedLength) {
     _multiParseState = EXPECT_BOUNDARY;
     _temp            = std::string();
-    _itemName        = String();
-    _itemFilename    = String();
-    _itemType        = String();
+    _itemName        = std::string();
+    _itemFilename    = std::string();
+    _itemType        = std::string();
   }
 
   if (_multiParseState == WAIT_FOR_RETURN1) {
@@ -593,8 +590,8 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
         } else if (_temp.length() > 19 && _temp.substring(0, 19).equalsIgnoreCase("Content-Disposition")) {
           _temp = _temp.substring(_temp.indexOf(';') + 2);
           while (_temp.indexOf(';') > 0) {
-            String name    = _temp.substring(0, _temp.indexOf('='));
-            String nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.indexOf(';') - 1);
+            std::string name    = _temp.substring(0, _temp.indexOf('='));
+            std::string nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.indexOf(';') - 1);
             if (name == "name") {
               _itemName = nameVal;
             } else if (name == "filename") {
@@ -603,8 +600,8 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
             }
             _temp = _temp.substring(_temp.indexOf(';') + 2);
           }
-          String name    = _temp.substring(0, _temp.indexOf('='));
-          String nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.length() - 1);
+          std::string name    = _temp.substring(0, _temp.indexOf('='));
+          std::string nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.length() - 1);
           if (name == "name") {
             _itemName = nameVal;
           } else if (name == "filename") {
@@ -612,13 +609,13 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
             _itemIsFile   = true;
           }
         }
-        _temp = String();
+        _temp = std::string();
       } else {
         _multiParseState = WAIT_FOR_RETURN1;
         // value starts from here
         _itemSize       = 0;
         _itemStartIndex = _parsedLength;
-        _itemValue      = String();
+        _itemValue      = std::string();
         if (_itemIsFile) {
           if (_itemBuffer) free(_itemBuffer);
           _itemBuffer = (uint8_t*)malloc(1460);
@@ -753,8 +750,10 @@ void AsyncWebServerRequest::_parseLine()
         else
           send(501);
       }
-    } else
-      _parseReqHeader();
+    } else {
+      _parseReqHeader(_temp);
+      _temp.clear();
+    }
   }
 }
 
@@ -845,7 +844,8 @@ AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(int code, std::stri
 
 AsyncWebServerResponse* AsyncWebServerRequest::beginResponse(FS& fs, std::string_view path, std::string_view contentType, bool download)
 {
-  if (fs.exists(path) || (!download && fs.exists(path + ".gz"))) return new AsyncFileResponse(fs, path, contentType, download);
+  String arduPath = OpenShock::StringToArduinoString(path);
+  if (fs.exists(arduPath) || (!download && fs.exists(arduPath + ".gz"))) return new AsyncFileResponse(fs, path, contentType, download);
   return NULL;
 }
 
@@ -876,16 +876,6 @@ AsyncResponseStream* AsyncWebServerRequest::beginResponseStream(std::string_view
   return new AsyncResponseStream(contentType, bufferSize);
 }
 
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse_P(int code, std::string_view contentType, const uint8_t* content, size_t len)
-{
-  return new AsyncProgmemResponse(code, contentType, content, len);
-}
-
-AsyncWebServerResponse* AsyncWebServerRequest::beginResponse_P(int code, std::string_view contentType, PGM_P content)
-{
-  return beginResponse_P(code, contentType, (const uint8_t*)content, strlen_P(content));
-}
-
 void AsyncWebServerRequest::send(int code, std::string_view contentType, std::string_view content)
 {
   send(beginResponse(code, contentType, content));
@@ -893,7 +883,8 @@ void AsyncWebServerRequest::send(int code, std::string_view contentType, std::st
 
 void AsyncWebServerRequest::send(FS& fs, std::string_view path, std::string_view contentType, bool download)
 {
-  if (fs.exists(path) || (!download && fs.exists(path + ".gz"))) {
+  String arduPath = OpenShock::StringToArduinoString(path);
+  if (fs.exists(arduPath) || (!download && fs.exists(arduPath + ".gz"))) {
     send(beginResponse(fs, path, contentType, download));
   } else
     send(404);
@@ -922,16 +913,6 @@ void AsyncWebServerRequest::sendChunked(std::string_view contentType, AwsRespons
   send(beginChunkedResponse(contentType, callback));
 }
 
-void AsyncWebServerRequest::send_P(int code, std::string_view contentType, const uint8_t* content, size_t len)
-{
-  send(beginResponse_P(code, contentType, content, len));
-}
-
-void AsyncWebServerRequest::send_P(int code, std::string_view contentType, PGM_P content)
-{
-  send(beginResponse_P(code, contentType, content));
-}
-
 void AsyncWebServerRequest::redirect(std::string_view url)
 {
   AsyncWebServerResponse* response = beginResponse(302);
@@ -939,7 +920,7 @@ void AsyncWebServerRequest::redirect(std::string_view url)
   send(response);
 }
 
-bool AsyncWebServerRequest::hasArg(const char* name) const
+bool AsyncWebServerRequest::hasArg(std::string_view name) const
 {
   for (const auto& arg : _params) {
     if (arg->name() == name) {
@@ -949,7 +930,7 @@ bool AsyncWebServerRequest::hasArg(const char* name) const
   return false;
 }
 
-const std::string& AsyncWebServerRequest::arg(std::string_view name) const
+std::string_view AsyncWebServerRequest::arg(std::string_view name) const
 {
   for (const auto& arg : _params) {
     if (arg->name() == name) {
@@ -959,35 +940,35 @@ const std::string& AsyncWebServerRequest::arg(std::string_view name) const
   return SharedEmptyString;
 }
 
-const std::string& AsyncWebServerRequest::arg(size_t i) const
+std::string_view AsyncWebServerRequest::arg(size_t i) const
 {
   return getParam(i)->value();
 }
 
-const std::string& AsyncWebServerRequest::argName(size_t i) const
+std::string_view AsyncWebServerRequest::argName(size_t i) const
 {
   return getParam(i)->name();
 }
 
-const std::string& AsyncWebServerRequest::pathArg(size_t i) const
+std::string_view AsyncWebServerRequest::pathArg(size_t i) const
 {
   auto param = _pathParams.nth(i);
   return param ? **param : SharedEmptyString;
 }
 
-const std::string& AsyncWebServerRequest::header(const char* name) const
+std::string_view AsyncWebServerRequest::header(std::string_view name) const
 {
   AsyncWebHeader* h = getHeader(name);
   return h ? h->value() : SharedEmptyString;
 }
 
-const std::string& AsyncWebServerRequest::header(size_t i) const
+std::string_view AsyncWebServerRequest::header(size_t i) const
 {
   AsyncWebHeader* h = getHeader(i);
   return h ? h->value() : SharedEmptyString;
 }
 
-const std::string& AsyncWebServerRequest::headerName(size_t i) const
+std::string_view AsyncWebServerRequest::headerName(size_t i) const
 {
   AsyncWebHeader* h = getHeader(i);
   return h ? h->name() : SharedEmptyString;

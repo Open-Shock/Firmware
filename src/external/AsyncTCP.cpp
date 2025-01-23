@@ -96,12 +96,12 @@ static QueueHandle_t _async_queue;
 static TaskHandle_t _async_service_task_handle = NULL;
 
 static SemaphoreHandle_t _slots_lock;
-const int _number_of_closed_slots = CONFIG_LWIP_MAX_ACTIVE_TCP;
+const uint _number_of_closed_slots = CONFIG_LWIP_MAX_ACTIVE_TCP;
 static uint32_t _closed_slots[_number_of_closed_slots];
 static uint32_t _closed_index = []() {
   _slots_lock = xSemaphoreCreateBinary();
   xSemaphoreGive(_slots_lock);
-  for (int i = 0; i < _number_of_closed_slots; ++i) {
+  for (uint i = 0; i < _number_of_closed_slots; ++i) {
     _closed_slots[i] = 1;
   }
   return 1;
@@ -147,7 +147,7 @@ static bool _remove_events_with_arg(void* arg)
       return false;
     }
     // discard packet if matching
-    if ((int)first_packet->arg == (int)arg) {
+    if (first_packet->arg == arg) {
       free(first_packet);
       first_packet = NULL;
       // return first packet to the back of the queue
@@ -160,7 +160,7 @@ static bool _remove_events_with_arg(void* arg)
     if (xQueueReceive(_async_queue, &packet, 0) != pdPASS) {
       return false;
     }
-    if ((int)packet->arg == (int)arg) {
+    if (packet->arg == arg) {
       free(packet);
       packet = NULL;
     } else if (xQueueSend(_async_queue, &packet, portMAX_DELAY) != pdPASS) {
@@ -884,7 +884,7 @@ void AsyncClient::_allocate_closed_slot()
 {
   xSemaphoreTake(_slots_lock, portMAX_DELAY);
   uint32_t closed_slot_min_index = 0;
-  for (int i = 0; i < _number_of_closed_slots; ++i) {
+  for (uint i = 0; i < _number_of_closed_slots; ++i) {
     if ((_closed_slot == -1 || _closed_slots[i] <= closed_slot_min_index) && _closed_slots[i] != 0) {
       closed_slot_min_index = _closed_slots[i];
       _closed_slot          = i;

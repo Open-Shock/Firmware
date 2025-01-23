@@ -25,26 +25,30 @@
 
 const char* const TAG = "WebHandlers";
 
-AsyncStaticWebHandler::AsyncStaticWebHandler(const char* uri, FS& fs, const char* path, const char* cache_control)
+AsyncStaticWebHandler::AsyncStaticWebHandler(std::string_view uri, FS& fs, std::string_view path, std::string_view cache_control)
   : _fs(fs)
-  , _uri(uri)
-  , _path(path)
   , _default_file("index.htm")
   , _cache_control(cache_control)
   , _shared_eTag("")
+  , _isDir(false)
 {
   // Ensure leading '/'
-  if (_uri.length() == 0 || _uri[0] != '/') _uri = "/" + _uri;
-  if (_path.length() == 0 || _path[0] != '/') _path = "/" + _path;
-
-  // If path ends with '/' we assume a hint that this is a directory to improve performance.
-  // However - if it does not end with '/' we, can't assume a file, path can still be a directory.
-  _isDir = _path[_path.length() - 1] == '/';
+  if (!OpenShock::StringStartsWith(uri, '/')) uri.remove_prefix(1);
+  if (!OpenShock::StringStartsWith(path, '/')) path.remove_prefix(1);
 
   // Remove the trailing '/' so we can handle default file
   // Notice that root will be "" not "/"
-  if (_uri[_uri.length() - 1] == '/') _uri = _uri.substr(0, _uri.length() - 1);
-  if (_path[_path.length() - 1] == '/') _path = _path.substr(0, _path.length() - 1);
+  if (OpenShock::StringEndsWith(uri, '/')) uri.remove_suffix(1);
+  if (OpenShock::StringEndsWith(path, '/')) {
+    path.remove_suffix(1);
+
+    // If path ends with '/' we assume a hint that this is a directory to improve performance.
+    // However - if it does not end with '/' we, can't assume a file, path can still be a directory.
+    _isDir = true;
+  }
+
+  _uri  = uri;
+  _path = path;
 }
 
 AsyncStaticWebHandler& AsyncStaticWebHandler::setIsDir(bool isDir)
@@ -53,7 +57,7 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setIsDir(bool isDir)
   return *this;
 }
 
-AsyncStaticWebHandler& AsyncStaticWebHandler::setDefaultFile(const char* filename)
+AsyncStaticWebHandler& AsyncStaticWebHandler::setDefaultFile(std::string_view filename)
 {
   _default_file = filename;
   return *this;
@@ -87,10 +91,10 @@ bool AsyncStaticWebHandler::canHandle(AsyncWebServerRequest* request)
 bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
 {
   // Remove the found uri
-  std::string path = request->url().substr(_uri.length());
+  std::string path(request->url().substr(_uri.length()));
 
   // We can skip the file check and look for default if request is to the root of a directory or that request path ends with '/'
-  bool canSkipFileCheck = (_isDir && path.length() == 0) || (path.length() && path[path.length() - 1] == '/');
+  bool canSkipFileCheck = (_isDir && path.length() == 0) || OpenShock::StringEndsWith(path, '/');
 
   path = _path + path;
 
@@ -101,7 +105,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
   if (_default_file.length() == 0) return false;
 
   // Try to add default file, ensure there is a trailing '/' ot the path.
-  if (path.length() == 0 || path[path.length() - 1] != '/') path += "/";
+  if (!OpenShock::StringEndsWith(path, '/')) path.push_back('/');
   path += _default_file;
 
   return _fileExists(request, path);

@@ -73,8 +73,8 @@ public:
     , _isFile(file)
   {
   }
-  const std::string& name() const { return _name; }
-  const std::string& value() const { return _value; }
+  std::string_view name() const { return _name; }
+  std::string_view value() const { return _value; }
   size_t size() const { return _size; }
   bool isPost() const { return _isForm; }
   bool isFile() const { return _isFile; }
@@ -101,15 +101,16 @@ public:
   {
     if (data.empty()) return;
 
-    auto index = data.find(':');
-    if (index == std::string_view::npos) return;
+    auto pair = OpenShock::StringSplitByFirst(data, ':');
 
-    _name  = data.substr(0, index);
-    _value = OpenShock::StringTrim(data.substr(index));
+    if (pair.first.empty() || pair.second.empty()) return;
+
+    _name  = pair.first;
+    _value = pair.second;
   }
   ~AsyncWebHeader() { }
-  const std::string& name() const { return _name; }
-  const std::string& value() const { return _value; }
+  std::string_view name() const { return _name; }
+  std::string_view value() const { return _value; }
   std::string toString() const { return std::string(_name + ": " + _value + "\r\n"); }
 };
 
@@ -186,7 +187,7 @@ private:
   void _addPathParam(const char* param);
 
   bool _parseReqHead();
-  bool _parseReqHeader();
+  bool _parseReqHeader(std::string_view header);
   void _parseLine();
   void _parsePlainPostChar(uint8_t data);
   void _parseMultipartPostByte(uint8_t data, bool last);
@@ -206,9 +207,9 @@ public:
   AsyncClient* client() { return _client; }
   HttpVersion version() const { return _version; }
   HttpRequestMethod method() const { return _method; }
-  const std::string& url() const { return _url; }
-  const std::string& host() const { return _host; }
-  const std::string& contentType() const { return _contentType; }
+  std::string_view url() const { return _url; }
+  std::string_view host() const { return _host; }
+  std::string_view contentType() const { return _contentType; }
   size_t contentLength() const { return _contentLength; }
   bool multipart() const { return _isMultipart; }
   const char* methodToString() const;
@@ -228,8 +229,6 @@ public:
   void send(Stream& stream, std::string_view contentType, size_t len);
   void send(std::string_view contentType, size_t len, AwsResponseFiller callback);
   void sendChunked(std::string_view contentType, AwsResponseFiller callback);
-  void send_P(int code, std::string_view contentType, const uint8_t* content, size_t len);
-  void send_P(int code, std::string_view contentType, PGM_P content);
 
   AsyncWebServerResponse* beginResponse(int code, std::string_view contentType = {}, std::string_view content = {});
   AsyncWebServerResponse* beginResponse(FS& fs, std::string_view path, std::string_view contentType = {}, bool download = false);
@@ -238,8 +237,6 @@ public:
   AsyncWebServerResponse* beginResponse(std::string_view contentType, size_t len, AwsResponseFiller callback);
   AsyncWebServerResponse* beginChunkedResponse(std::string_view contentType, AwsResponseFiller callback);
   AsyncResponseStream* beginResponseStream(std::string_view contentType, size_t bufferSize = 1460);
-  AsyncWebServerResponse* beginResponse_P(int code, std::string_view contentType, const uint8_t* content, size_t len);
-  AsyncWebServerResponse* beginResponse_P(int code, std::string_view contentType, PGM_P content);
 
   size_t headers() const;                       // get header count
   bool hasHeader(std::string_view name) const;  // check if header exists
@@ -253,17 +250,17 @@ public:
   AsyncWebParameter* getParam(std::string_view name, bool post = false, bool file = false) const;
   AsyncWebParameter* getParam(size_t num) const;
 
-  size_t args() const { return params(); }              // get arguments count
-  const std::string& arg(std::string_view name) const;  // get request argument value by name
-  const std::string& arg(size_t i) const;               // get request argument value by number
-  const std::string& argName(size_t i) const;           // get request argument name by number
-  bool hasArg(const char* name) const;                  // check if argument exists
+  size_t args() const { return params(); }            // get arguments count
+  std::string_view arg(std::string_view name) const;  // get request argument value by name
+  std::string_view arg(size_t i) const;               // get request argument value by number
+  std::string_view argName(size_t i) const;           // get request argument name by number
+  bool hasArg(std::string_view name) const;           // check if argument exists
 
-  const std::string& pathArg(size_t i) const;
+  std::string_view pathArg(size_t i) const;
 
-  const std::string& header(const char* name) const;  // get request header value by name
-  const std::string& header(size_t i) const;          // get request header value by number
-  const std::string& headerName(size_t i) const;      // get request header name by number
+  std::string_view header(std::string_view name) const;  // get request header value by name
+  std::string_view header(size_t i) const;               // get request header value by number
+  std::string_view headerName(size_t i) const;           // get request header name by number
   std::string urlDecode(std::string_view text) const;
 };
 
@@ -411,7 +408,7 @@ class DefaultHeaders {
 public:
   using ConstIterator = headers_t::ConstIterator;
 
-  void addHeader(const std::string& name, const std::string& value) { _headers.add(new AsyncWebHeader(name, value)); }
+  void addHeader(std::string_view name, std::string_view value) { _headers.add(new AsyncWebHeader(name, value)); }
 
   ConstIterator begin() const { return _headers.begin(); }
   ConstIterator end() const { return _headers.end(); }

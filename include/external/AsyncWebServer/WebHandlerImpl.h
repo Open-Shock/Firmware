@@ -44,11 +44,11 @@ protected:
   bool _isDir;
 
 public:
-  AsyncStaticWebHandler(const char* uri, FS& fs, const char* path, const char* cache_control);
+  AsyncStaticWebHandler(std::string_view uri, FS& fs, std::string_view path, std::string_view cache_control);
   virtual bool canHandle(AsyncWebServerRequest* request) override final;
   virtual void handleRequest(AsyncWebServerRequest* request) override final;
   AsyncStaticWebHandler& setIsDir(bool isDir);
-  AsyncStaticWebHandler& setDefaultFile(const char* filename);
+  AsyncStaticWebHandler& setDefaultFile(std::string_view filename);
   AsyncStaticWebHandler& setCacheControl(std::string_view cache_control);
   AsyncStaticWebHandler& setSharedEtag(std::string_view etag);
 };
@@ -96,7 +96,7 @@ public:
 
     // Match 1 ??
     if (OpenShock::StringStartsWith(uri, "/*."sv)) {
-      uri = uri.substr(uri.find_last_of('.'));
+      uri = OpenShock::StringAfterLast(uri, '.');
 
       return OpenShock::StringEndsWith(requestUrl, uri);
     }
