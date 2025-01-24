@@ -7,7 +7,7 @@ const char* const TAG = "SerialInputHandler";
 #include "config/Config.h"
 #include "config/SerialInputConfig.h"
 #include "Convert.h"
-#include "EStopManager.h"
+#include "estop/EStopManager.h"
 #include "FormatHelpers.h"
 #include "http/HTTPRequestManager.h"
 #include "Logging.h"
@@ -597,7 +597,7 @@ bool SerialInputHandler::Init()
     return false;
   }
 
-  if (TaskUtils::TaskCreateExpensive(_serialRxTask, "SerialRX", 4800, nullptr, 1, nullptr) != pdPASS) {  // TODO: Profile stack size
+  if (TaskUtils::TaskCreateExpensive(_serialRxTask, "SerialRX", 10'000, nullptr, 1, nullptr) != pdPASS) {  // TODO: Profile stack size
     OS_LOGE(TAG, "Failed to create serial RX task");
     return false;
   }
