@@ -240,10 +240,6 @@ bool Convert::ToSizeT(std::string_view str, size_t& val)
 {
   return spanToT(str, val);
 }
-bool Convert::ToSizeT(std::string_view str, size_t& val)
-{
-  return spanToUT(str, val);
-}
 bool Convert::ToBool(std::string_view str, bool& val)
 {
   if (str.length() > 5) {
