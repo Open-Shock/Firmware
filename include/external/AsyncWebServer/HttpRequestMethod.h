@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 enum HttpRequestMethod : uint16_t {
   HTTP_GET     = 0b0000000001,
   HTTP_POST    = 0b0000000010,

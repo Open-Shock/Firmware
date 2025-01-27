@@ -176,6 +176,7 @@ namespace OpenShock {
   bool StringIEquals(std::string_view a, std::string_view b);
   bool StringIContains(std::string_view haystack, std::string_view needle);
   bool StringHasPrefixIC(std::string_view view, std::string_view prefix);
+  bool StringTryRemovePrefixIC(std::string_view& view, std::string_view prefix);
 
   String StringToArduinoString(std::string_view view);
 }  // namespace OpenShock

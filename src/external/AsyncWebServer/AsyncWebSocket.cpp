@@ -1139,7 +1139,7 @@ void AsyncWebSocketResponse::_respond(AsyncWebServerRequest* request)
     return;
   }
   std::string out = _assembleHead(request->version());
-  request->client()->write(out.c_str(), out.size());
+  request->client()->write(out);
   _state = RESPONSE_WAIT_ACK;
 }
 

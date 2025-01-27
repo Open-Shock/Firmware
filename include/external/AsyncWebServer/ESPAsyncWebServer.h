@@ -127,6 +127,14 @@ typedef enum {
   RCT_MAX
 } RequestedConnectionType;
 
+enum HttpParseState {
+  PARSE_REQ_START,
+  PARSE_REQ_HEADERS,
+  PARSE_REQ_BODY,
+  PARSE_REQ_END,
+  PARSE_REQ_FAIL
+};
+
 typedef std::function<size_t(uint8_t*, size_t, size_t)> AwsResponseFiller;
 
 class AsyncWebServerRequest {
@@ -143,7 +151,7 @@ private:
   ArDisconnectHandler _onDisconnectfn;
 
   std::string _temp;
-  uint8_t _parseState;
+  HttpParseState _parseState;
 
   HttpVersion _version;
   HttpRequestMethod _method;

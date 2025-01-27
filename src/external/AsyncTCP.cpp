@@ -1082,12 +1082,12 @@ bool AsyncClient::free()
   return false;
 }
 
-size_t AsyncClient::write(const char* data)
+size_t AsyncClient::write(std::string_view data)
 {
-  if (data == NULL) {
+  if (data.empty()) {
     return 0;
   }
-  return write(data, strlen(data));
+  return write(data.data(), data.size());
 }
 
 size_t AsyncClient::write(const char* data, size_t size, uint8_t apiflags)

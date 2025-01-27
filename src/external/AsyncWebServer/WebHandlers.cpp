@@ -33,13 +33,13 @@ AsyncStaticWebHandler::AsyncStaticWebHandler(std::string_view uri, FS& fs, std::
   , _isDir(false)
 {
   // Ensure leading '/'
-  if (!OpenShock::StringStartsWith(uri, '/')) uri.remove_prefix(1);
-  if (!OpenShock::StringStartsWith(path, '/')) path.remove_prefix(1);
+  if (!OpenShock::StringHasPrefix(uri, '/')) uri.remove_prefix(1);
+  if (!OpenShock::StringHasPrefix(path, '/')) path.remove_prefix(1);
 
   // Remove the trailing '/' so we can handle default file
   // Notice that root will be "" not "/"
-  if (OpenShock::StringEndsWith(uri, '/')) uri.remove_suffix(1);
-  if (OpenShock::StringEndsWith(path, '/')) {
+  if (OpenShock::StringHasSuffix(uri, '/')) uri.remove_suffix(1);
+  if (OpenShock::StringHasSuffix(path, '/')) {
     path.remove_suffix(1);
 
     // If path ends with '/' we assume a hint that this is a directory to improve performance.
@@ -77,7 +77,7 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setSharedEtag(std::string_view eta
 
 bool AsyncStaticWebHandler::canHandle(AsyncWebServerRequest* request)
 {
-  if (request->method() != HTTP_GET || !OpenShock::StringStartsWith(request->url(), _uri) || !request->isExpectedRequestedConnType(RCT_DEFAULT, RCT_HTTP)) {
+  if (request->method() != HTTP_GET || !OpenShock::StringHasPrefix(request->url(), _uri) || !request->isExpectedRequestedConnType(RCT_DEFAULT, RCT_HTTP)) {
     return false;
   }
   if (_getFile(request)) {
@@ -94,7 +94,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
   std::string path(request->url().substr(_uri.length()));
 
   // We can skip the file check and look for default if request is to the root of a directory or that request path ends with '/'
-  bool canSkipFileCheck = (_isDir && path.length() == 0) || OpenShock::StringEndsWith(path, '/');
+  bool canSkipFileCheck = (_isDir && path.length() == 0) || OpenShock::StringHasSuffix(path, '/');
 
   path = _path + path;
 
@@ -105,7 +105,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest* request)
   if (_default_file.length() == 0) return false;
 
   // Try to add default file, ensure there is a trailing '/' ot the path.
-  if (!OpenShock::StringEndsWith(path, '/')) path.push_back('/');
+  if (!OpenShock::StringHasSuffix(path, '/')) path.push_back('/');
   path += _default_file;
 
   return _fileExists(request, path);

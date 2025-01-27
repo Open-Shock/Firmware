@@ -79,7 +79,7 @@ public:
   bool send();                                                                          // send all data added with the method above
 
   // write equals add()+send()
-  size_t write(const char* data);
+  size_t write(std::string_view data);
   size_t write(const char* data, size_t size, uint8_t apiflags = ASYNC_WRITE_FLAG_COPY);  // only when canSend() == true
 
   uint8_t state();

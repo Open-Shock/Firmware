@@ -141,6 +141,14 @@ bool OpenShock::StringHasPrefixIC(std::string_view view, std::string_view prefix
   if (view.size() < prefix.size()) return false;
   return StringIEquals(view.substr(0, prefix.size()), prefix);
 }
+bool OpenShock::StringTryRemovePrefixIC(std::string_view& view, std::string_view prefix)
+{
+  if (!StringHasPrefixIC(view, prefix)) return false;
+
+  view.remove_prefix(prefix.size());
+
+  return true;
+}
 
 String OpenShock::StringToArduinoString(std::string_view view) {
   return String(view.data(), view.size());

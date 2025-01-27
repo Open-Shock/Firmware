@@ -250,14 +250,14 @@ void AsyncBasicResponse::_respond(AsyncWebServerRequest* request)
   size_t space    = request->client()->space();
 
   if (!_contentLength && space >= out.size()) {
-    _writtenLength += request->client()->write(out.data(), out.size());
+    _writtenLength += request->client()->write(out);
     _state = RESPONSE_WAIT_ACK;
     return;
   }
 
   if (_contentLength && space >= out.size() + _contentLength) {
     out += _content;
-    _writtenLength += request->client()->write(out.data(), out.size());
+    _writtenLength += request->client()->write(out);
     _state = RESPONSE_WAIT_ACK;
     return;
   }
@@ -265,7 +265,7 @@ void AsyncBasicResponse::_respond(AsyncWebServerRequest* request)
   if (space && space < out.size()) {
     _content.insert(_content.begin(), out.begin() + space, out.end());
     _contentLength += out.size() - space;
-    _writtenLength += request->client()->write(out.data(), space);
+    _writtenLength += request->client()->write(out);
     _state = RESPONSE_CONTENT;
     return;
   }
@@ -275,7 +275,7 @@ void AsyncBasicResponse::_respond(AsyncWebServerRequest* request)
     out += std::string_view(_content).substr(0, shift);
     _content.erase(0, shift);
     _sentLength += shift;
-    _writtenLength += request->client()->write(out.c_str(), out.length());
+    _writtenLength += request->client()->write(out);
     _state = RESPONSE_CONTENT;
     return;
   }
@@ -556,7 +556,7 @@ AsyncFileResponse::AsyncFileResponse(File content, std::string_view path, std::s
 
   using namespace std::string_view_literals;
 
-  if (!download && OpenShock::StringEndsWith(content.name(), ".gz"sv) && !OpenShock::StringEndsWith(path, ".gz"sv)) {
+  if (!download && OpenShock::StringHasSuffix(content.name(), ".gz"sv) && !OpenShock::StringHasSuffix(path, ".gz"sv)) {
     addHeader("Content-Encoding", "gzip");
     _sendContentLength = true;
     _chunked           = false;

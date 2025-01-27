@@ -21,10 +21,10 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include <string>
+#include "util/StringUtils.h"
 
-#include "stddef.h"
-#include <time.h>
+#include <cstddef>
+#include <string>
 
 class AsyncStaticWebHandler : public AsyncWebHandler {
   using File = fs::File;
@@ -95,17 +95,17 @@ public:
     std::string_view requestUrl = request->url();
 
     // Match 1 ??
-    if (OpenShock::StringStartsWith(uri, "/*."sv)) {
+    if (OpenShock::StringHasPrefix(uri, "/*."sv)) {
       uri = OpenShock::StringAfterLast(uri, '.');
 
-      return OpenShock::StringEndsWith(requestUrl, uri);
+      return OpenShock::StringHasSuffix(requestUrl, uri);
     }
 
     // Match 2 ????
-    if (OpenShock::StringEndsWith(uri, '*')) {
+    if (OpenShock::StringHasSuffix(uri, '*')) {
       uri.remove_suffix(1);
 
-      return OpenShock::StringStartsWith(requestUrl, uri);
+      return OpenShock::StringHasPrefix(requestUrl, uri);
     }
 
     // Huh ??????
@@ -114,7 +114,7 @@ public:
     }
 
     // Way to check if requestUrl ends with uri + "/" without any allocations
-    return requestUrl.length() > uri.length() && requestUrl[uri.length()] == '/' && OpenShock::StringStartsWith(requestUrl, uri);
+    return requestUrl.length() > uri.length() && requestUrl[uri.length()] == '/' && OpenShock::StringHasPrefix(requestUrl, uri);
   }
 
   virtual void handleRequest(AsyncWebServerRequest* request) override final

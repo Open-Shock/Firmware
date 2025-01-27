@@ -28,14 +28,6 @@ static const std::string SharedEmptyString = std::string();
 
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
 
-enum {
-  PARSE_REQ_START,
-  PARSE_REQ_HEADERS,
-  PARSE_REQ_BODY,
-  PARSE_REQ_END,
-  PARSE_REQ_FAIL
-};
-
 static bool httpTryBasicUriDecode(std::string_view uri, std::string& uri_out)
 {
   uri_out.clear();
@@ -115,7 +107,7 @@ static bool httpParseMethod(std::string_view str, HttpRequestMethod& method_out)
 static bool httpParseHttpVersion(std::string_view str, HttpVersion& http_version_out)
 {
   using namespace std::string_view_literals;
-  if (!OpenShock::StringStartsWith(str, "HTTP/"sv)) {
+  if (!OpenShock::StringHasPrefix(str, "HTTP/"sv)) {
     return false;
   }
 
@@ -267,7 +259,7 @@ void AsyncWebServerRequest::_onData(void* buf, size_t len)
       } else {
         if (_parsedLength == 0) {
           using namespace std::string_view_literals;
-          if (OpenShock::StringStartsWith(_contentType, "application/x-www-form-urlencoded"sv)) {
+          if (OpenShock::StringHasPrefix(_contentType, "application/x-www-form-urlencoded"sv)) {
             _isPlainPost = true;
           } else if (_contentType == "text/plain" && __is_param_char(((char*)buf)[0])) {
             size_t i = 0;
@@ -448,7 +440,7 @@ bool AsyncWebServerRequest::_parseReqHeader(std::string_view header)
     _host = pair.second;
   } else if (OpenShock::StringIEquals(pair.first, "Content-Type"sv)) {
     _contentType = OpenShock::StringBeforeFirst(pair.second, ';');
-    if (OpenShock::StringStartsWith(_contentType, "multipart/"sv)) {
+    if (OpenShock::StringHasPrefix(_contentType, "multipart/"sv)) {
       _boundary = OpenShock::StringAfterFirst(pair.second, '=');
       _boundary.replace("\"", "");  // TODO: Optimize this by merging with string_view assignment
       _isMultipart = true;
@@ -500,7 +492,7 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data)
   std::string_view name  = "body"sv;
   std::string_view value = _temp;
 
-  if (!OpenShock::StringStartsWith(value, '{') && !OpenShock::StringStartsWith(value, '[')) {
+  if (!OpenShock::StringHasPrefix(value, '{') && !OpenShock::StringHasPrefix(value, '[')) {
     size_t equals_pos = value.find('=');
     if (equals_pos != std::string_view::npos) {
       name  = value.substr(0, equals_pos);
@@ -583,11 +575,27 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
   } else if (_multiParseState == PARSE_HEADERS) {
     if ((char)data != '\r' && (char)data != '\n') _temp += (char)data;
     if ((char)data == '\n') {
-      if (_temp.length()) {
-        if (_temp.length() > 12 && _temp.substring(0, 12).equalsIgnoreCase("Content-Type")) {
-          _itemType   = _temp.substring(14);
+      using namespace std::string_view_literals;
+      std::string_view view = _temp;
+      if (!view.empty()) {
+        if (OpenShock::StringTryRemovePrefixIC(view, "Content-Type:"sv)) {
+          _itemType   = OpenShock::StringTrim(view);
           _itemIsFile = true;
-        } else if (_temp.length() > 19 && _temp.substring(0, 19).equalsIgnoreCase("Content-Disposition")) {
+        } else if (OpenShock::StringTryRemovePrefixIC(view, "Content-Disposition:"sv)) {
+          for (const auto part : OpenShock::StringSplit(view, ';')) {
+            part = OpenShock::StringTrim(part);
+
+            size_t equalsPos = part.find('=');
+            if (equalsPos == std::string_view::npos) {
+              if (part != "form-data"sv) {
+                _multiParseState = PARSE_ERROR;
+                return;
+              }
+            } else {
+              std::string_view key   = view.substr(0, equalsPos);
+              std::string_view value = view.substr(equalsPos + 1);
+            }
+          }
           _temp = _temp.substring(_temp.indexOf(';') + 2);
           while (_temp.indexOf(';') > 0) {
             std::string name    = _temp.substring(0, _temp.indexOf('='));
@@ -737,8 +745,8 @@ void AsyncWebServerRequest::_parseLine()
       // end of headers
       _server->_attachHandler(this);
       if (_expectingContinue) {
-        const char* response = "HTTP/1.1 100 Continue\r\n\r\n";
-        _client->write(response, strlen(response));
+        using namespace std::string_view_literals;
+        _client->write("HTTP/1.1 100 Continue\r\n\r\n"sv);
       }
       // check handler for authentication
       if (_contentLength) {
