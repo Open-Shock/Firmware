@@ -93,14 +93,54 @@ static bool ParseHttpVersion(std::string_view view, HttpVersion& http_version_ou
   return true;
 }
 
-bool HttpRequestBodyParser::TryParse(std::string_view view)
+size_t HttpRequestBodyParser::Consume(std::string_view view)
 {
   using namespace std::string_view_literals;
 
-  size_t pos = view.find("\r\n"sv);
-  if (pos == std::string_view::npos) return false;              // Need more data
+  if (_state == HttpParseState::Error) return 0;
 
-  if (!TryParseRequestLine(view.substr(0, pos))) return false;  // Malformed request
+  size_t offset = 0;
+
+  // Parse the requestline
+  if (_state == HttpParseState::RequestLine) {
+    // Find end of requestline
+    size_t pos = view.find("\r\n"sv);
+    if (pos == std::string_view::npos) return 0;  // Need more data
+
+    // Parse requestline
+    if (!TryParseRequestLine(view.substr(0, pos))) {
+      _state = HttpParseState::Error;
+      return 0;
+    }
+
+    // Set state for continuation
+    _state = HttpParseState::Headers;
+    offset += pos + 2;
+  }
+
+  // Parse the headers
+  if (_state == HttpParseState::Headers) {
+    do {
+      // Find end of header
+      size_t pos = view.find("\r\n"sv, offset);
+      if (pos == std::string_view::npos) return offset;  // Need more data
+      if (pos == 0) break;                               // End of headers
+
+      // Parse header
+      if (!TryParseHeader(view.substr(0, pos))) {
+        _state = HttpParseState::Error;
+        return 0;
+      }
+
+      offset += pos + 2;
+    } while (true);
+
+    // Set state for continuation
+    _state = HttpParseState::Body;
+  }
+
+  if (_state == HttpParseState::Body) {
+  }
 
   return true;
 }
@@ -151,4 +191,17 @@ bool HttpRequestBodyParser::TryParseRequestLine(std::string_view view)
   }
 
   return true;
+}
+
+bool HttpRequestBodyParser::TryParseHeader(std::string_view view)
+{
+  size_t pos = view.find(':');
+  if (pos == std::string_view::npos) return false;
+
+  std::string_view name  = view.substr(0, pos);
+  std::string_view value = view.substr(pos + 1);
+
+  // TODO: Validate these two
+
+  _headers.emplace(name, value);
 }
