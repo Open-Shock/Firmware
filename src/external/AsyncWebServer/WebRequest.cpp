@@ -18,6 +18,8 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
+#include <freertos/FreeRTOS.h>
+
 #include "external/AsyncWebServer/ESPAsyncWebServer.h"
 #include "external/AsyncWebServer/WebResponseImpl.h"
 
@@ -129,8 +131,9 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _server(s)
   , _handler(NULL)
   , _response(NULL)
+  , _onDisconnectfn(nullptr)
   , _temp()
-  , _parseState(0)
+  , _parseState((HttpParseState)0)
   , _version {}
   , _method(HTTP_ANY)
   , _url()
@@ -156,7 +159,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _itemFilename()
   , _itemType()
   , _itemValue()
-  , _itemBuffer(0)
+  , _itemBuffer(nullptr)
   , _itemBufferIndex(0)
   , _itemIsFile(false)
   , _tempObject(NULL)
@@ -442,7 +445,7 @@ bool AsyncWebServerRequest::_parseReqHeader(std::string_view header)
     _contentType = OpenShock::StringBeforeFirst(pair.second, ';');
     if (OpenShock::StringHasPrefix(_contentType, "multipart/"sv)) {
       _boundary = OpenShock::StringAfterFirst(pair.second, '=');
-      _boundary.replace("\"", "");  // TODO: Optimize this by merging with string_view assignment
+      _boundary.erase(std::remove(_boundary.begin(), _boundary.end(), '"'), _boundary.end());  // TODO: Optimize this by merging with string_view assignment
       _isMultipart = true;
     }
   } else if (OpenShock::StringIEquals(pair.first, "Content-Length"sv)) {
@@ -594,27 +597,14 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
             } else {
               std::string_view key   = view.substr(0, equalsPos);
               std::string_view value = view.substr(equalsPos + 1);
+
+              if (key == "name"sv) {
+                _itemName = value;
+              } else if (key == "filename"sv) {
+                _itemFilename = value;
+                _itemIsFile   = true;
+              }
             }
-          }
-          _temp = _temp.substring(_temp.indexOf(';') + 2);
-          while (_temp.indexOf(';') > 0) {
-            std::string name    = _temp.substring(0, _temp.indexOf('='));
-            std::string nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.indexOf(';') - 1);
-            if (name == "name") {
-              _itemName = nameVal;
-            } else if (name == "filename") {
-              _itemFilename = nameVal;
-              _itemIsFile   = true;
-            }
-            _temp = _temp.substring(_temp.indexOf(';') + 2);
-          }
-          std::string name    = _temp.substring(0, _temp.indexOf('='));
-          std::string nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.length() - 1);
-          if (name == "name") {
-            _itemName = nameVal;
-          } else if (name == "filename") {
-            _itemFilename = nameVal;
-            _itemIsFile   = true;
           }
         }
         _temp = std::string();

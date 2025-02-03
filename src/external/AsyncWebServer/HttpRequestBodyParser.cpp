@@ -1,3 +1,5 @@
+#include <freertos/FreeRTOS.h>
+
 #include "external/AsyncWebServer/HttpRequestBodyParser.h"
 
 #include "Convert.h"

@@ -22,8 +22,8 @@ public:
 
   HttpMethod method() const { return _method; }
   HttpVersion version() const { return _version; }
-  HttpVersion versionMajor() const { return _version.major; }
-  HttpVersion versionMinor() const { return _version.minor; }
+  uint8_t versionMajor() const { return _version.major; }
+  uint8_t versionMinor() const { return _version.minor; }
   std::string_view url() const { return _url; }
   const std::map<std::string, std::string>& queryParams() const { return _queryParams; }
   const std::map<std::string, std::string>& headers() const { return _headers; }
@@ -39,4 +39,4 @@ private:
   std::string _url;
   std::map<std::string, std::string> _queryParams;
   std::map<std::string, std::string> _headers;
-}
+};
