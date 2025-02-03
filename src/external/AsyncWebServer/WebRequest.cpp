@@ -583,11 +583,11 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
           _itemIsFile = true;
         } else if (OpenShock::StringTryRemovePrefixIC(view, "Content-Disposition:"sv)) {
           for (const auto part : OpenShock::StringSplit(view, ';')) {
-            part = OpenShock::StringTrim(part);
+            auto trimmed = OpenShock::StringTrim(part);
 
-            size_t equalsPos = part.find('=');
+            size_t equalsPos = trimmed.find('=');
             if (equalsPos == std::string_view::npos) {
-              if (part != "form-data"sv) {
+              if (trimmed != "form-data"sv) {
                 _multiParseState = PARSE_ERROR;
                 return;
               }
