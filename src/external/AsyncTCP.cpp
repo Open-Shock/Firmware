@@ -39,6 +39,8 @@ const char* const TAG = "AsyncTCP";
 
 #include <cstring>
 
+#define INVALID_CLOSED_SLOT -1
+
 /*
  * TCP/IP Event Task
  * */
@@ -93,7 +95,7 @@ typedef struct {
 } lwip_event_packet_t;
 
 static QueueHandle_t _async_queue;
-static TaskHandle_t _async_service_task_handle = NULL;
+static TaskHandle_t _async_service_task_handle = nullptr;
 
 static SemaphoreHandle_t _slots_lock;
 const uint _number_of_closed_slots = CONFIG_LWIP_MAX_ACTIVE_TCP;
@@ -135,8 +137,8 @@ static inline bool _get_async_event(lwip_event_packet_t** e)
 
 static bool _remove_events_with_arg(void* arg)
 {
-  lwip_event_packet_t* first_packet = NULL;
-  lwip_event_packet_t* packet       = NULL;
+  lwip_event_packet_t* first_packet = nullptr;
+  lwip_event_packet_t* packet       = nullptr;
 
   if (!_async_queue) {
     return false;
@@ -149,9 +151,11 @@ static bool _remove_events_with_arg(void* arg)
     // discard packet if matching
     if (first_packet->arg == arg) {
       free(first_packet);
-      first_packet = NULL;
+      first_packet = nullptr;
       // return first packet to the back of the queue
     } else if (xQueueSend(_async_queue, &first_packet, portMAX_DELAY) != pdPASS) {
+      // couldn't requeue packet, free it before returning
+      free(first_packet);
       return false;
     }
   }
@@ -162,8 +166,10 @@ static bool _remove_events_with_arg(void* arg)
     }
     if (packet->arg == arg) {
       free(packet);
-      packet = NULL;
+      packet = nullptr;
     } else if (xQueueSend(_async_queue, &packet, portMAX_DELAY) != pdPASS) {
+      // couldn't requeue packet, free it before returning
+      free(packet);
       return false;
     }
   }
@@ -172,9 +178,9 @@ static bool _remove_events_with_arg(void* arg)
 
 static void _handle_async_event(lwip_event_packet_t* e)
 {
-  if (e->arg == NULL) {
-    // do nothing when arg is NULL
-    // ets_printf("event arg == NULL: 0x%08x\n", e->recv.pcb);
+  if (e->arg == nullptr) {
+    // do nothing when arg is nullptr
+    // ets_printf("event arg == nullptr: 0x%08x\n", e->recv.pcb);
   } else if (e->event == LWIP_TCP_CLEAR) {
     _remove_events_with_arg(e->arg);
   } else if (e->event == LWIP_TCP_RECV) {
@@ -207,30 +213,30 @@ static void _handle_async_event(lwip_event_packet_t* e)
 
 static void _async_service_task(void* pvParameters)
 {
-  lwip_event_packet_t* packet = NULL;
+  lwip_event_packet_t* packet = nullptr;
   for (;;) {
     if (_get_async_event(&packet)) {
 #if CONFIG_ASYNC_TCP_USE_WDT
-      if (esp_task_wdt_add(NULL) != ESP_OK) {
+      if (esp_task_wdt_add(nullptr) != ESP_OK) {
         OS_LOGE(TAG, "Failed to add async task to WDT");
       }
 #endif
       _handle_async_event(packet);
 #if CONFIG_ASYNC_TCP_USE_WDT
-      if (esp_task_wdt_delete(NULL) != ESP_OK) {
+      if (esp_task_wdt_delete(nullptr) != ESP_OK) {
         OS_LOGE(TAG, "Failed to remove loop task from WDT");
       }
 #endif
     }
   }
-  vTaskDelete(NULL);
-  _async_service_task_handle = NULL;
+  vTaskDelete(nullptr);
+  _async_service_task_handle = nullptr;
 }
 /*
 static void _stop_async_task(){
     if(_async_service_task_handle){
         vTaskDelete(_async_service_task_handle);
-        _async_service_task_handle = NULL;
+        _async_service_task_handle = nullptr;
     }
 }
 */
@@ -240,7 +246,7 @@ static bool _start_async_task()
     return false;
   }
   if (!_async_service_task_handle) {
-    OpenShock::TaskUtils::TaskCreateUniversal(_async_service_task, "async_tcp", CONFIG_ASYNC_TCP_STACK, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
+    OpenShock::TaskUtils::TaskCreateUniversal(_async_service_task, "async_tcp", CONFIG_ASYNC_TCP_STACK, nullptr, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
     if (!_async_service_task_handle) {
       return false;
     }
@@ -255,8 +261,12 @@ static bool _start_async_task()
 static int8_t _tcp_clear_events(void* arg)
 {
   lwip_event_packet_t* e = new lwip_event_packet_t {};
-  e->event               = LWIP_TCP_CLEAR;
-  e->arg                 = arg;
+  if (!e) {
+    OS_LOGE(TAG, "Failed to allocate event packet");
+    return ERR_MEM;
+  }
+  e->event = LWIP_TCP_CLEAR;
+  e->arg   = arg;
   if (!_prepend_async_event(&e)) {
     delete e;
   }
@@ -267,10 +277,14 @@ static int8_t _tcp_connected(void* arg, tcp_pcb* pcb, int8_t err)
 {
   // ets_printf("+C: 0x%08x\n", pcb);
   lwip_event_packet_t* e = new lwip_event_packet_t {};
-  e->event               = LWIP_TCP_CONNECTED;
-  e->arg                 = arg;
-  e->connected.pcb       = pcb;
-  e->connected.err       = err;
+  if (!e) {
+    OS_LOGE(TAG, "Failed to allocate event packet");
+    return ERR_MEM;
+  }
+  e->event         = LWIP_TCP_CONNECTED;
+  e->arg           = arg;
+  e->connected.pcb = pcb;
+  e->connected.err = err;
   if (!_prepend_async_event(&e)) {
     delete e;
   }
@@ -281,9 +295,13 @@ static int8_t _tcp_poll(void* arg, struct tcp_pcb* pcb)
 {
   // ets_printf("+P: 0x%08x\n", pcb);
   lwip_event_packet_t* e = new lwip_event_packet_t {};
-  e->event               = LWIP_TCP_POLL;
-  e->arg                 = arg;
-  e->poll.pcb            = pcb;
+  if (!e) {
+    OS_LOGE(TAG, "Failed to allocate event packet");
+    return ERR_MEM;
+  }
+  e->event    = LWIP_TCP_POLL;
+  e->arg      = arg;
+  e->poll.pcb = pcb;
   if (!_send_async_event(&e)) {
     delete e;
   }
@@ -293,7 +311,11 @@ static int8_t _tcp_poll(void* arg, struct tcp_pcb* pcb)
 static int8_t _tcp_recv(void* arg, struct tcp_pcb* pcb, struct pbuf* pb, int8_t err)
 {
   lwip_event_packet_t* e = new lwip_event_packet_t {};
-  e->arg                 = arg;
+  if (!e) {
+    OS_LOGE(TAG, "Failed to allocate event packet");
+    return ERR_MEM;
+  }
+  e->arg = arg;
   if (pb) {
     // ets_printf("+R: 0x%08x\n", pcb);
     e->event    = LWIP_TCP_RECV;
@@ -318,10 +340,14 @@ static int8_t _tcp_sent(void* arg, struct tcp_pcb* pcb, uint16_t len)
 {
   // ets_printf("+S: 0x%08x\n", pcb);
   lwip_event_packet_t* e = new lwip_event_packet_t {};
-  e->event               = LWIP_TCP_SENT;
-  e->arg                 = arg;
-  e->sent.pcb            = pcb;
-  e->sent.len            = len;
+  if (!e) {
+    OS_LOGE(TAG, "Failed to allocate event packet");
+    return ERR_MEM;
+  }
+  e->event    = LWIP_TCP_SENT;
+  e->arg      = arg;
+  e->sent.pcb = pcb;
+  e->sent.len = len;
   if (!_send_async_event(&e)) {
     delete e;
   }
@@ -362,9 +388,13 @@ static void _tcp_dns_found(const char* name, struct ip_addr* ipaddr, void* arg)
 static int8_t _tcp_accept(void* arg, AsyncClient* client)
 {
   lwip_event_packet_t* e = new lwip_event_packet_t {};
-  e->event               = LWIP_TCP_ACCEPT;
-  e->arg                 = arg;
-  e->accept.client       = client;
+  if (!e) {
+    OS_LOGE(TAG, "Failed to allocate event packet");
+    return ERR_MEM;
+  }
+  e->event         = LWIP_TCP_ACCEPT;
+  e->arg           = arg;
+  e->accept.client = client;
   if (!_prepend_async_event(&e)) {
     delete e;
   }
@@ -571,7 +601,7 @@ static err_t _tcp_listen_api(struct tcpip_api_call_data* api_call_msg)
 static tcp_pcb* _tcp_listen_with_backlog(tcp_pcb* pcb, uint8_t backlog)
 {
   if (!pcb) {
-    return NULL;
+    return nullptr;
   }
   tcp_api_call_t msg;
   msg.pcb         = pcb;
@@ -607,8 +637,8 @@ AsyncClient::AsyncClient(tcp_pcb* pcb)
   , _rx_since_timeout(0)
   , _ack_timeout(ASYNC_MAX_ACK_TIME)
   , _connect_port(0)
-  , prev(NULL)
-  , next(NULL)
+  , prev(nullptr)
+  , next(nullptr)
 {
   _pcb         = pcb;
   _closed_slot = -1;
@@ -661,12 +691,12 @@ bool AsyncClient::operator==(const AsyncClient& other)
 
 AsyncClient& AsyncClient::operator+=(const AsyncClient& other)
 {
-  if (next == NULL) {
+  if (next == nullptr) {
     next       = (AsyncClient*)(&other);
     next->prev = this;
   } else {
     AsyncClient* c = next;
-    while (c->next != NULL) {
+    while (c->next != nullptr) {
       c = c->next;
     }
     c->next       = (AsyncClient*)(&other);
@@ -744,7 +774,7 @@ bool AsyncClient::connect(ip_addr_t* addr, uint16_t port)
 
   tcp_pcb* pcb = tcp_new_ip_type(IPADDR_TYPE_V4);
   if (!pcb) {
-    OS_LOGE(TAG, "pcb == NULL");
+    OS_LOGE(TAG, "pcb == nullptr");
     return false;
   }
 
@@ -790,14 +820,14 @@ int8_t AsyncClient::abort()
 {
   if (_pcb) {
     _tcp_abort(_pcb, _closed_slot);
-    _pcb = NULL;
+    _pcb = nullptr;
   }
   return ERR_ABRT;
 }
 
 size_t AsyncClient::space()
 {
-  if ((_pcb != NULL) && (_pcb->state == 4)) {
+  if ((_pcb != nullptr) && (_pcb->state == 4)) {
     return tcp_sndbuf(_pcb);
   }
   return 0;
@@ -805,7 +835,7 @@ size_t AsyncClient::space()
 
 size_t AsyncClient::add(const char* data, size_t size, uint8_t apiflags)
 {
-  if (!_pcb || size == 0 || data == NULL) {
+  if (!_pcb || size == 0 || data == nullptr) {
     return 0;
   }
   size_t room = space();
@@ -862,17 +892,17 @@ int8_t AsyncClient::_close()
   int8_t err = ERR_OK;
   if (_pcb) {
     // OS_LOGI(TAG, "");
-    tcp_arg(_pcb, NULL);
-    tcp_sent(_pcb, NULL);
-    tcp_recv(_pcb, NULL);
-    tcp_err(_pcb, NULL);
-    tcp_poll(_pcb, NULL, 0);
+    tcp_arg(_pcb, nullptr);
+    tcp_sent(_pcb, nullptr);
+    tcp_recv(_pcb, nullptr);
+    tcp_err(_pcb, nullptr);
+    tcp_poll(_pcb, nullptr, 0);
     _tcp_clear_events(this);
     err = _tcp_close(_pcb, _closed_slot);
     if (err != ERR_OK) {
       err = abort();
     }
-    _pcb = NULL;
+    _pcb = nullptr;
     if (_discard_cb) {
       _discard_cb(_discard_cb_arg, this);
     }
@@ -880,20 +910,27 @@ int8_t AsyncClient::_close()
   return err;
 }
 
-void AsyncClient::_allocate_closed_slot()
+bool AsyncClient::_allocate_closed_slot()
 {
-  xSemaphoreTake(_slots_lock, portMAX_DELAY);
-  uint32_t closed_slot_min_index = 0;
-  for (uint i = 0; i < _number_of_closed_slots; ++i) {
-    if ((_closed_slot == -1 || _closed_slots[i] <= closed_slot_min_index) && _closed_slots[i] != 0) {
-      closed_slot_min_index = _closed_slots[i];
-      _closed_slot          = i;
+  bool allocated = false;
+  if (xSemaphoreTake(_slots_lock, portMAX_DELAY) == pdTRUE) {
+    uint32_t closed_slot_min_index = 0;
+    allocated                      = _closed_slot != INVALID_CLOSED_SLOT;
+    if (!allocated) {
+      for (int i = 0; i < _number_of_closed_slots; ++i) {
+        if ((_closed_slot == INVALID_CLOSED_SLOT || _closed_slots[i] <= closed_slot_min_index) && _closed_slots[i] != 0) {
+          closed_slot_min_index = _closed_slots[i];
+          _closed_slot          = i;
+        }
+      }
+      allocated = _closed_slot != INVALID_CLOSED_SLOT;
+      if (allocated) {
+        _closed_slots[_closed_slot] = 0;
+      }
     }
+    xSemaphoreGive(_slots_lock);
   }
-  if (_closed_slot != -1) {
-    _closed_slots[_closed_slot] = 0;
-  }
-  xSemaphoreGive(_slots_lock);
+  return allocated;
 }
 
 void AsyncClient::_free_closed_slot()
@@ -928,14 +965,14 @@ int8_t AsyncClient::_connected(void* pcb, int8_t err)
 void AsyncClient::_error(int8_t err)
 {
   if (_pcb) {
-    tcp_arg(_pcb, NULL);
+    tcp_arg(_pcb, nullptr);
     if (_pcb->state == LISTEN) {
-      tcp_sent(_pcb, NULL);
-      tcp_recv(_pcb, NULL);
-      tcp_err(_pcb, NULL);
-      tcp_poll(_pcb, NULL, 0);
+      tcp_sent(_pcb, nullptr);
+      tcp_recv(_pcb, nullptr);
+      tcp_err(_pcb, nullptr);
+      tcp_poll(_pcb, nullptr, 0);
     }
-    _pcb = NULL;
+    _pcb = nullptr;
   }
   if (_error_cb) {
     _error_cb(_error_cb_arg, this, err);
@@ -952,18 +989,18 @@ int8_t AsyncClient::_lwip_fin(tcp_pcb* pcb, int8_t err)
     OS_LOGE(TAG, "0x%08x != 0x%08x", (uint32_t)pcb, (uint32_t)_pcb);
     return ERR_OK;
   }
-  tcp_arg(_pcb, NULL);
+  tcp_arg(_pcb, nullptr);
   if (_pcb->state == LISTEN) {
-    tcp_sent(_pcb, NULL);
-    tcp_recv(_pcb, NULL);
-    tcp_err(_pcb, NULL);
-    tcp_poll(_pcb, NULL, 0);
+    tcp_sent(_pcb, nullptr);
+    tcp_recv(_pcb, nullptr);
+    tcp_err(_pcb, nullptr);
+    tcp_poll(_pcb, nullptr, 0);
   }
   if (tcp_close(_pcb) != ERR_OK) {
     tcp_abort(_pcb);
   }
   _free_closed_slot();
-  _pcb = NULL;
+  _pcb = nullptr;
   return ERR_OK;
 }
 
@@ -992,13 +1029,13 @@ int8_t AsyncClient::_sent(tcp_pcb* pcb, uint16_t len)
 
 int8_t AsyncClient::_recv(tcp_pcb* pcb, pbuf* pb, int8_t err)
 {
-  while (pb != NULL) {
+  while (pb != nullptr) {
     _rx_last_packet = OpenShock::micros();
     // we should not ack before we assimilate the data
     _ack_pcb = true;
     pbuf* b  = pb;
     pb       = b->next;
-    b->next  = NULL;
+    b->next  = nullptr;
     if (_pb_cb) {
       _pb_cb(_pb_cb_arg, this, b);
     } else {
@@ -1414,7 +1451,7 @@ void AsyncServer::begin()
   int8_t err;
   _pcb = tcp_new_ip_type(IPADDR_TYPE_V4);
   if (!_pcb) {
-    OS_LOGE(TAG, "_pcb == NULL");
+    OS_LOGE(TAG, "_pcb == nullptr");
     return;
   }
 
@@ -1422,6 +1459,7 @@ void AsyncServer::begin()
 
   if (err != ERR_OK) {
     _tcp_close(_pcb, -1);
+    _pcb = nullptr;
     OS_LOGE(TAG, "bind error: %d", err);
     return;
   }
@@ -1429,7 +1467,7 @@ void AsyncServer::begin()
   static uint8_t backlog = 5;
   _pcb                   = _tcp_listen_with_backlog(_pcb, backlog);
   if (!_pcb) {
-    OS_LOGE(TAG, "listen_pcb == NULL");
+    OS_LOGE(TAG, "listen_pcb == nullptr");
     return;
   }
   tcp_arg(_pcb, (void*)this);
@@ -1439,12 +1477,12 @@ void AsyncServer::begin()
 void AsyncServer::end()
 {
   if (_pcb) {
-    tcp_arg(_pcb, NULL);
-    tcp_accept(_pcb, NULL);
+    tcp_arg(_pcb, nullptr);
+    tcp_accept(_pcb, nullptr);
     if (tcp_close(_pcb) != ERR_OK) {
       _tcp_abort(_pcb, -1);
     }
-    _pcb = NULL;
+    _pcb = nullptr;
   }
 }
 
