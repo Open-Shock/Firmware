@@ -17,8 +17,6 @@ const char* const TAG = "main";
 #include "wifi/WiFiManager.h"
 #include "wifi/WiFiScanManager.h"
 
-#include <Arduino.h>
-
 #include <memory>
 
 // Internal setup function, returns true if setup succeeded, false otherwise.
@@ -92,7 +90,7 @@ void appSetup()
 // Arduino setup function
 void setup()
 {
-  ::Serial.begin(115'200);
+  // esp_log_level_set(ESP_LOG_VERBOSE);
 
   OpenShock::Config::Init();
 
