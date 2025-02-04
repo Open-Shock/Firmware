@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Common.h"
+#include "SimpleMutex.h"
 
 #include <hal/gpio_types.h>
 
-#include <freertos/semphr.h>
 #include <freertos/task.h>
 
 #include <cstdint>
@@ -13,6 +13,7 @@
 namespace OpenShock {
   class PinPatternManager {
     DISABLE_COPY(PinPatternManager);
+    DISABLE_MOVE(PinPatternManager);
 
   public:
     struct State {
@@ -41,6 +42,6 @@ namespace OpenShock {
     gpio_num_t m_gpioPin;
     std::vector<State> m_pattern;
     TaskHandle_t m_taskHandle;
-    SemaphoreHandle_t m_taskMutex;
+    SimpleMutex m_taskMutex;
   };
 }  // namespace OpenShock

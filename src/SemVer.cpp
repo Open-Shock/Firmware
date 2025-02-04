@@ -2,10 +2,15 @@
 
 const char* const TAG = "SemVer";
 
+#include "Convert.h"
 #include "Logging.h"
+#include "util/DigitCounter.h"
 #include "util/StringUtils.h"
 
 using namespace OpenShock;
+
+// https://semver.org/#backusnaur-form-grammar-for-valid-semver-versions
+#pragma region Validation Functions
 
 constexpr bool _semverIsLetter(char c)
 {
@@ -149,12 +154,15 @@ constexpr bool _semverIsDotSeperatedPreleaseIdentifiers(std::string_view str)
 
   return _semverIsPrereleaseIdentifier(str);
 }
-const auto _semverIsPatch      = _semverIsNumericIdentifier;
-const auto _semverIsMinor      = _semverIsNumericIdentifier;
-const auto _semverIsMajor      = _semverIsNumericIdentifier;
-const auto _semverIsPrerelease = _semverIsDotSeperatedPreleaseIdentifiers;
-const auto _semverIsBuild      = _semverIsDotSeperatedBuildIdentifiers;
-bool _semverIsVersionCore(std::string_view str)
+
+// For readability
+#define _semverIsPatch      _semverIsNumericIdentifier
+#define _semverIsMinor      _semverIsNumericIdentifier
+#define _semverIsMajor      _semverIsNumericIdentifier
+#define _semverIsPrerelease _semverIsDotSeperatedPreleaseIdentifiers
+#define _semverIsBuild      _semverIsDotSeperatedBuildIdentifiers
+
+constexpr bool _semverIsVersionCore(std::string_view str)
 {
   if (str.empty()) {
     return false;
@@ -167,7 +175,7 @@ bool _semverIsVersionCore(std::string_view str)
 
   return _semverIsMajor(parts[0]) && _semverIsMinor(parts[1]) && _semverIsPatch(parts[2]);
 }
-bool _semverIsSemver(std::string_view str)
+constexpr bool _semverIsSemver(std::string_view str)
 {
   if (str.empty()) {
     return false;
@@ -208,31 +216,7 @@ bool _semverIsSemver(std::string_view str)
 
   return false;
 }
-
-bool _tryParseU16(std::string_view str, uint16_t& out)
-{
-  if (str.empty()) {
-    return false;
-  }
-
-  uint32_t u32 = 0;
-  for (auto c : str) {
-    if (c < '0' || c > '9') {
-      return false;
-    }
-
-    u32 *= 10;
-    u32 += c - '0';
-
-    if (u32 > std::numeric_limits<uint16_t>::max()) {
-      return false;
-    }
-  }
-
-  out = static_cast<uint16_t>(u32);
-
-  return true;
-}
+#pragma endregion
 
 bool SemVer::isValid() const
 {
@@ -249,23 +233,31 @@ bool SemVer::isValid() const
 
 std::string SemVer::toString() const
 {
-  std::string str;
-  str.reserve(32);
+  std::size_t length = 2 + Util::Digits10Count(major) + Util::Digits10Count(minor) + Util::Digits10Count(patch);
+  if (!prerelease.empty()) {
+    length += 1 + prerelease.length();
+  }
+  if (!build.empty()) {
+    length += 1 + build.length();
+  }
 
-  str += std::to_string(major);
-  str += '.';
-  str += std::to_string(minor);
-  str += '.';
-  str += std::to_string(patch);
+  std::string str;
+  str.reserve(length);
+
+  Convert::FromUint16(major, str);
+  str.push_back('.');
+  Convert::FromUint16(minor, str);
+  str.push_back('.');
+  Convert::FromUint16(patch, str);
 
   if (!prerelease.empty()) {
-    str += '-';
-    str.append(prerelease.c_str(), prerelease.length());
+    str.push_back('-');
+    str.append(prerelease);
   }
 
   if (!build.empty()) {
-    str += '+';
-    str.append(build.c_str(), build.length());
+    str.push_back('+');
+    str.append(build);
   }
 
   return str;
@@ -309,7 +301,7 @@ bool SemVer::operator<(const SemVer& other) const
   return build < other.build;
 }
 
-bool SemVer::operator==(const std::string_view& other) const
+bool SemVer::operator==(std::string_view other) const
 {
   SemVer otherSemVer;
   if (!OpenShock::TryParseSemVer(other, otherSemVer)) {
@@ -319,7 +311,7 @@ bool SemVer::operator==(const std::string_view& other) const
   return *this == otherSemVer;
 }
 
-bool SemVer::operator<(const std::string_view& other) const
+bool SemVer::operator<(std::string_view other) const
 {
   SemVer otherSemVer;
   if (!OpenShock::TryParseSemVer(other, otherSemVer)) {
@@ -339,41 +331,46 @@ bool OpenShock::TryParseSemVer(std::string_view semverStr, SemVer& semver)
 
   std::string_view majorStr = parts[0], minorStr = parts[1], patchStr = parts[2];
 
-  auto dashIdx = patchStr.find('-');
-  if (dashIdx != std::string_view::npos) {
-    semver.prerelease = patchStr.substr(dashIdx + 1);
-    patchStr          = patchStr.substr(0, dashIdx);
-  }
+  size_t plusIdx = patchStr.find('+');
+  size_t dashIdx = patchStr.find('-');
 
-  auto plusIdx = semver.prerelease.find('+');
-  if (plusIdx != std::string_view::npos) {
-    semver.build      = semver.prerelease.substr(plusIdx + 1);
-    semver.prerelease = semver.prerelease.substr(0, plusIdx);
-  }
+  std::string_view restStr = patchStr.substr(std::min(dashIdx, plusIdx));
+  patchStr.remove_suffix(restStr.length());
 
-  if (!_tryParseU16(majorStr, semver.major)) {
+  if (!Convert::ToUint16(majorStr, semver.major)) {
     OS_LOGE(TAG, "Invalid major version: %.*s", majorStr.length(), majorStr.data());
     return false;
   }
 
-  if (!_tryParseU16(minorStr, semver.minor)) {
+  if (!Convert::ToUint16(minorStr, semver.minor)) {
     OS_LOGE(TAG, "Invalid minor version: %.*s", minorStr.length(), minorStr.data());
     return false;
   }
 
-  if (!_tryParseU16(patchStr, semver.patch)) {
+  if (!Convert::ToUint16(patchStr, semver.patch)) {
     OS_LOGE(TAG, "Invalid patch version: %.*s", patchStr.length(), patchStr.data());
     return false;
   }
 
-  if (!semver.prerelease.empty() && !_semverIsPrerelease(semver.prerelease)) {
-    OS_LOGE(TAG, "Invalid prerelease: %s", semver.prerelease.c_str());
-    return false;
-  }
+  if (!restStr.empty()) {
+    if (plusIdx != std::string_view::npos) {
+      semver.build = restStr.substr((plusIdx - patchStr.length()) + 1);
+      restStr.remove_suffix(semver.build.length() + 1);
 
-  if (!semver.build.empty() && !_semverIsBuild(semver.build)) {
-    OS_LOGE(TAG, "Invalid build: %s", semver.build.c_str());
-    return false;
+      if (!semver.build.empty() && !_semverIsBuild(semver.build)) {
+        OS_LOGE(TAG, "Invalid build: %s", semver.build.c_str());
+        return false;
+      }
+    }
+
+    if (dashIdx != std::string_view::npos) {
+      semver.prerelease = restStr.substr(1);
+
+      if (!semver.prerelease.empty() && !_semverIsPrerelease(semver.prerelease)) {
+        OS_LOGE(TAG, "Invalid prerelease: %s", semver.prerelease.c_str());
+        return false;
+      }
+    }
   }
 
   return true;
